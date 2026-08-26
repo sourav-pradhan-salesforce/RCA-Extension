@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RCA Analysis</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-container">
+
+    <!-- ── Header ── -->
+    <header class="app-header">
+      <div class="header-inner">
+        <div class="header-logo">
+          <div class="logo-mark">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"
+                    stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div class="logo-text">
+            <span class="logo-title">RCA Analysis</span>
+            <span class="logo-sub">Salesforce Intelligence</span>
+          </div>
+        </div>
+        <button class="btn-icon" id="settingsBtn" title="Settings">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06
+                     a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09
+                     A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83
+                     l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09
+                     A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83
+                     l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09
+                     a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83
+                     l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09
+                     a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- ── Main View ── -->
+    <main id="mainView" class="view active">
+      <div class="form-body">
+
+        <!-- Case Number -->
+        <div class="form-group">
+          <label class="form-label" for="caseNumber">Case Number</label>
+          <div class="input-wrapper">
+            <span class="input-prefix-icon">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+              </svg>
+            </span>
+            <input type="text" id="caseNumber" class="form-input has-prefix" placeholder="e.g. 00123456" autocomplete="off"/>
+          </div>
+        </div>
+
+        <!-- Audience -->
+        <div class="form-group">
+          <label class="form-label">Audience</label>
+          <div class="audience-grid">
+
+            <label class="aud-card">
+              <input type="radio" name="audience" value="leadership" checked />
+              <div class="aud-inner">
+                <div class="aud-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                    <circle cx="9" cy="7" r="4"/>
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
+                  </svg>
+                </div>
+                <span class="aud-title">Leadership</span>
+                <span class="aud-sub">Exec · 5 sec</span>
+              </div>
+              <span class="aud-check">✓</span>
+            </label>
+
+            <label class="aud-card">
+              <input type="radio" name="audience" value="customer" />
+              <div class="aud-inner">
+                <div class="aud-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                    <circle cx="12" cy="7" r="4"/>
+                  </svg>
+                </div>
+                <span class="aud-title">Customer</span>
+                <span class="aud-sub">Plain · 4 sec</span>
+              </div>
+              <span class="aud-check">✓</span>
+            </label>
+
+            <label class="aud-card">
+              <input type="radio" name="audience" value="cic" />
+              <div class="aud-inner">
+                <div class="aud-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                  </svg>
+                </div>
+                <span class="aud-title">CIC</span>
+                <span class="aud-sub">Full · all sec</span>
+              </div>
+              <span class="aud-check">✓</span>
+            </label>
+
+          </div>
+        </div>
+
+        <!-- Template -->
+        <div class="form-group">
+          <div class="label-row">
+            <label class="form-label">Template</label>
+            <button class="link-btn" id="manageTemplatesBtn">Manage →</button>
+          </div>
+          <div class="select-wrapper">
+            <select id="templateSelect" class="form-select">
+              <option value="standard">Standard SEV RCA</option>
+              <option value="brief">Brief Incident Summary</option>
+            </select>
+            <svg class="select-arrow" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </div>
+        </div>
+
+        <!-- CTA -->
+        <div class="cta-group">
+          <button class="btn-generate" id="generateBtn">
+            <span class="btn-shimmer"></span>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <polygon points="5 3 19 12 5 21 5 3"/>
+            </svg>
+            Generate RCA
+          </button>
+          <button class="btn-demo" id="demoBtn">Try Demo</button>
+        </div>
+
+      </div>
+    </main>
+
+    <!-- ── Loading View ── -->
+    <div id="loadingView" class="view">
+      <div class="loading-body">
+
+        <div id="loadingSpinner" class="orbital-wrap">
+          <svg class="orbital-svg" viewBox="0 0 100 100">
+            <circle class="orbital-track" cx="50" cy="50" r="38"/>
+            <circle class="orbital-arc"   cx="50" cy="50" r="38"/>
+          </svg>
+          <div class="orbital-center">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0176D3" stroke-width="2">
+              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+            </svg>
+          </div>
+        </div>
+
+        <p class="loading-title" id="loadingTitle">Generating RCA</p>
+
+        <div class="status-row">
+          <p id="loadingStatus" class="loading-status">Searching Slack SEV channels…</p>
+          <span id="loadingTimer" class="loading-timer" style="display:none;">0:00</span>
+        </div>
+
+        <div id="loadingError" class="loading-error hidden">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          <p id="loadingErrorMsg"></p>
+          <button class="btn-back" id="errorBackBtn">← Go Back</button>
+        </div>
+
+        <!-- Live console — open by default so users can watch live progress -->
+        <div class="console-wrap">
+          <button class="console-toggle" id="consoleToggle">▼ Hide console</button>
+          <div class="console-panel" id="consolePanel">
+            <div class="console-lines" id="consoleLines"></div>
+          </div>
+        </div>
+
+        <!-- Step timeline -->
+        <div class="steps-timeline">
+          <div class="step" id="step-slack">
+            <div class="step-node">
+              <div class="step-pulse"></div>
+              <div class="step-circle">
+                <svg class="step-check" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>
+                <span class="step-num">1</span>
+              </div>
+            </div>
+            <span class="step-label">Slack SEV &amp; swarm</span>
+          </div>
+          <div class="step" id="step-orgcs">
+            <div class="step-node">
+              <div class="step-pulse"></div>
+              <div class="step-circle">
+                <svg class="step-check" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>
+                <span class="step-num">2</span>
+              </div>
+            </div>
+            <span class="step-label">OrgCS case data</span>
+          </div>
+          <div class="step" id="step-org62">
+            <div class="step-node">
+              <div class="step-pulse"></div>
+              <div class="step-circle">
+                <svg class="step-check" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>
+                <span class="step-num">3</span>
+              </div>
+            </div>
+            <span class="step-label">Org62 account data</span>
+          </div>
+          <div class="step" id="step-gus">
+            <div class="step-node">
+              <div class="step-pulse"></div>
+              <div class="step-circle">
+                <svg class="step-check" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>
+                <span class="step-num">4</span>
+              </div>
+            </div>
+            <span class="step-label">GUS work items</span>
+          </div>
+          <div class="step" id="step-public">
+            <div class="step-node">
+              <div class="step-pulse"></div>
+              <div class="step-circle">
+                <svg class="step-check" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>
+                <span class="step-num">5</span>
+              </div>
+            </div>
+            <span class="step-label">Knowledge &amp; Known Issues</span>
+          </div>
+          <div class="step" id="step-generate">
+            <div class="step-node">
+              <div class="step-pulse"></div>
+              <div class="step-circle">
+                <svg class="step-check" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>
+                <span class="step-num">6</span>
+              </div>
+            </div>
+            <span class="step-label">Generating &amp; validating</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ── Settings View ── -->
+    <div id="settingsView" class="view">
+      <div class="sub-header">
+        <button class="btn-ghost" id="settingsBackBtn">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
+          </svg>
+          Back
+        </button>
+        <h2 class="sub-title">Settings</h2>
+      </div>
+      <div class="sub-body">
+        <div class="info-card">
+          <div class="info-card-title">Backend Server</div>
+          <p class="info-card-text">Local proxy on your machine handles all Claude and MCP requests.</p>
+          <div class="info-row">
+            <span class="info-label">URL</span>
+            <code class="info-code">http://127.0.0.1:3001</code>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Status</span>
+            <span id="proxyStatusBadge" class="status-badge checking">Checking…</span>
+          </div>
+        </div>
+        <button class="btn-secondary" id="checkProxyBtn">Check Connection</button>
+        <div id="proxyDetail" class="hidden"></div>
+      </div>
+    </div>
+
+    <!-- ── Templates View ── -->
+    <div id="templatesView" class="view">
+      <div class="sub-header">
+        <button class="btn-ghost" id="templatesBackBtn">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
+          </svg>
+          Back
+        </button>
+        <h2 class="sub-title">Templates</h2>
+      </div>
+      <div class="sub-body">
+        <div class="template-list" id="templateList"></div>
+        <button class="btn-secondary" id="addTemplateBtn">+ Add Custom Template</button>
+        <div id="templateEditor" class="template-editor hidden">
+          <div class="form-group">
+            <label class="form-label">Template Name</label>
+            <input type="text" id="templateName" class="form-input" placeholder="e.g. P1 Incident Template" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Instructions</label>
+            <textarea id="templateBody" class="form-textarea" rows="5" placeholder="Describe sections, tone, detail level…"></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Or upload a template file (.txt, .md)</label>
+            <input type="file" id="templateFile" accept=".txt,.md" class="form-file-input" />
+          </div>
+          <div class="editor-actions">
+            <button class="btn-ghost" id="cancelTemplateBtn">Cancel</button>
+            <button class="btn-primary btn-sm" id="saveTemplateBtn">Save</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="toast" class="toast hidden"></div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

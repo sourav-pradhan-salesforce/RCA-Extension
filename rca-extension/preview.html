@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>RCA Preview</title>
+  <style>
+    body { margin:0; font-family:-apple-system,"Salesforce Sans",Arial,sans-serif; background:#F3F3F3; }
+    #loading {
+      display:flex; align-items:center; justify-content:center; height:100vh;
+      flex-direction:column; gap:14px;
+    }
+    .load-orbital { position:relative; width:52px; height:52px; }
+    .load-orbital svg { position:absolute; top:0; left:0; width:100%; height:100%; }
+    .orb-track { fill:none; stroke:#E5E5E5; stroke-width:4; }
+    .orb-arc   {
+      fill:none; stroke:#0176D3; stroke-width:4; stroke-linecap:round;
+      stroke-dasharray:50 160; transform-origin:50% 50%;
+      animation:spin 1.1s cubic-bezier(0.4,0,0.2,1) infinite;
+    }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .load-text { font-size:14px; color:#706E6B; font-weight:500; }
+  </style>
+</head>
+<body>
+  <div id="loading">
+    <div class="load-orbital">
+      <svg viewBox="0 0 100 100">
+        <circle class="orb-track" cx="50" cy="50" r="38"/>
+        <circle class="orb-arc"   cx="50" cy="50" r="38"/>
+      </svg>
+    </div>
+    <span class="load-text">Loading RCA…</span>
+  </div>
+  <div id="content" style="display:none;"></div>
+  <script src="preview.js"></script>
+</body>
+</html>
