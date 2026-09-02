@@ -206,15 +206,11 @@ def build_mcp_config(tokens):
 
     servers = {}
     for name, cfg in base_cfg.items():
-        token = tokens.get(name)
-        if token and cfg.get('type') == 'http':
-            # OAuth HTTP server: keep full config so CLI can refresh, + inject current token
-            entry = dict(cfg)
-            entry['headers'] = {'Authorization': f'Bearer {token}'}
-            servers[name] = entry
-        else:
-            # stdio or no token: keep original config intact (env vars preserved)
-            servers[name] = cfg
+        # Only include stdio servers in mcp_config — HTTP/OAuth servers (orgcs, Org62-Sobject-Read)
+        # are handled by plugins which auto-refresh tokens. Including them here causes stale-token auth failures.
+        if cfg.get('type') == 'http':
+            continue
+        servers[name] = cfg
 
     with open(cfg_path, 'w') as f:
         json.dump({'mcpServers': servers}, f)
@@ -784,10 +780,22 @@ class RCAHandler(BaseHTTPRequestHandler):
             try:
                 import re as _re
 
+                # Preprocess HTML for Google Docs:
+                # <th> has white text + dark bg via CSS — GDocs strips CSS leaving invisible text.
+                # Convert <th ...>content</th> → <td><strong>content</strong></td>
+                gdoc_html = _re.sub(
+                    r'<th([^>]*)>(.*?)</th>',
+                    lambda m: f'<td><strong>{m.group(2)}</strong></td>',
+                    html_content,
+                    flags=_re.DOTALL | _re.IGNORECASE
+                )
+                # Also strip source badges and links inside th content to keep it clean
+                gdoc_html = _re.sub(r'<span[^>]*class="source-badge"[^>]*>.*?</span>', '', gdoc_html, flags=_re.DOTALL)
+
                 # Single call: import HTML directly — preserves formatting
                 r1 = gdoc_mcp('import_to_google_doc', {
                     'file_name': f'RCA — Case {case_number}',
-                    'content': html_content[:500000],
+                    'content': gdoc_html[:500000],
                     'source_format': 'html',
                 })
                 content1 = r1.get('result', {}).get('content', [{}])
