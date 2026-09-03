@@ -1,52 +1,7 @@
-/* ── Dark Mode ── */
+/* ── Theme ── */
 (function() {
   const saved = localStorage.getItem('rcaTheme') || 'light';
   if (saved === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
-})();
-
-/* ── Particle Canvas ── */
-(function() {
-  const canvas = document.getElementById('particleCanvas');
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  let W, H, particles;
-
-  function resize() {
-    W = canvas.width  = canvas.offsetWidth  || 360;
-    H = canvas.height = canvas.offsetHeight || 400;
-  }
-
-  function initParticles() {
-    particles = Array.from({ length: 28 }, () => ({
-      x: Math.random() * W,
-      y: Math.random() * H,
-      r: 1 + Math.random() * 2,
-      dx: (Math.random() - 0.5) * 0.4,
-      dy: (Math.random() - 0.5) * 0.4,
-      opacity: 0.2 + Math.random() * 0.4,
-    }));
-  }
-
-  function draw() {
-    ctx.clearRect(0, 0, W, H);
-    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-    const color = isDark ? '100,160,255' : '1,118,211';
-    particles.forEach(p => {
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(${color},${p.opacity})`;
-      ctx.fill();
-      p.x += p.dx; p.y += p.dy;
-      if (p.x < 0 || p.x > W) p.dx *= -1;
-      if (p.y < 0 || p.y > H) p.dy *= -1;
-    });
-    requestAnimationFrame(draw);
-  }
-
-  resize();
-  initParticles();
-  draw();
-  window.addEventListener('resize', () => { resize(); initParticles(); });
 })();
 
 /* ── View Router ── */
@@ -86,7 +41,6 @@ function updateMoonSun(isDark) {
   if (sun)  sun.style.display  = isDark ? 'none' : '';
   if (moon) moon.style.display = isDark ? '' : 'none';
 }
-
 updateMoonSun(document.documentElement.getAttribute('data-theme') === 'dark');
 
 /* ── Template Management ── */
@@ -98,7 +52,6 @@ function showTemplateState(state) {
   document.getElementById('templateUploading').classList.toggle('hidden', state !== 'uploading');
 }
 
-// Load saved template on startup
 chrome.storage.local.get(['rcaTemplateId', 'rcaTemplateName'], ({ rcaTemplateId, rcaTemplateName }) => {
   if (rcaTemplateId && rcaTemplateName) {
     currentTemplateId = rcaTemplateId;
@@ -109,14 +62,13 @@ chrome.storage.local.get(['rcaTemplateId', 'rcaTemplateName'], ({ rcaTemplateId,
   }
 });
 
-document.getElementById('templateUploadBtn').addEventListener('click', () => {
+document.getElementById('templateUploadBtn').addEventListener('click', (e) => {
+  e.stopPropagation();
   document.getElementById('templateFileInput').click();
 });
 
-document.getElementById('templateEmpty').addEventListener('click', (e) => {
-  if (e.target.id !== 'templateUploadBtn') {
-    document.getElementById('templateFileInput').click();
-  }
+document.getElementById('templateEmpty').addEventListener('click', () => {
+  document.getElementById('templateFileInput').click();
 });
 
 document.getElementById('templateFileInput').addEventListener('change', async (e) => {
@@ -125,17 +77,15 @@ document.getElementById('templateFileInput').addEventListener('change', async (e
   e.target.value = '';
 
   showTemplateState('uploading');
-
   try {
-    // Read file as base64
     const base64 = await new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = () => resolve(reader.result.split(',')[1]);
+      reader.onload  = () => resolve(reader.result.split(',')[1]);
       reader.onerror = reject;
       reader.readAsDataURL(file);
     });
 
-    const res = await fetch('http://127.0.0.1:3001/set-template', {
+    const res  = await fetch('http://127.0.0.1:3001/set-template', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ file_name: file.name, file_data: base64 }),
@@ -150,7 +100,7 @@ document.getElementById('templateFileInput').addEventListener('change', async (e
     showToast('Template loaded: ' + file.name, 'success');
   } catch (err) {
     showTemplateState('empty');
-    showToast('Template upload failed: ' + err.message, 'error');
+    showToast('Upload failed: ' + err.message, 'error');
   }
 });
 
@@ -159,7 +109,7 @@ document.getElementById('templateRemoveBtn').addEventListener('click', (e) => {
   currentTemplateId = null;
   chrome.storage.local.remove(['rcaTemplateId', 'rcaTemplateName']);
   showTemplateState('empty');
-  showToast('Template removed', '');
+  showToast('Template removed');
 });
 
 /* ── Settings ── */
@@ -171,19 +121,17 @@ async function checkProxyStatus() {
   const badge  = document.getElementById('proxyStatusBadge');
   const detail = document.getElementById('proxyDetail');
   badge.textContent = 'Checking…';
-  badge.className = 'status-badge checking';
-  detail.className = 'hidden';
+  badge.className   = 'status-pill checking';
+  detail.classList.add('hidden');
   try {
-    const res  = await fetch('http://127.0.0.1:3001/health', { signal: AbortSignal.timeout(3000) });
-    const json = await res.json();
-    if (json.status === 'ok') { badge.textContent = 'Online ✓'; badge.className = 'status-badge online'; }
+    const res = await fetch('http://127.0.0.1:3001/health', { signal: AbortSignal.timeout(3000) });
+    const j   = await res.json();
+    if (j.status === 'ok') { badge.textContent = 'Online ✓'; badge.className = 'status-pill online'; }
     else throw new Error();
   } catch (_) {
     badge.textContent = 'Offline';
-    badge.className   = 'status-badge offline';
-    detail.className  = '';
-    detail.style.cssText = 'padding:10px 12px;border-radius:8px;font-size:12px;background:#FFF0F0;color:#C41E3A;border:1px solid #FFB3B3;margin-top:4px;';
-    detail.textContent = 'Backend not running — the LaunchAgent should auto-start it on login.';
+    badge.className   = 'status-pill offline';
+    detail.classList.remove('hidden');
   }
 }
 
@@ -206,7 +154,7 @@ document.getElementById('errorBackBtn').addEventListener('click', () => { stopTi
 
 document.getElementById('generateBtn').addEventListener('click', async () => {
   const caseNumber = document.getElementById('caseNumber').value.trim();
-  if (!caseNumber) { showToast('Please enter a case number', 'error'); return; }
+  if (!caseNumber) { showToast('Enter a case number', 'error'); return; }
 
   showView('loading');
   resetSteps();
@@ -236,19 +184,16 @@ let timerStart    = null;
 function startTimer() {
   timerStart = Date.now();
   const el = document.getElementById('loadingTimer');
-  if (el) { el.textContent = '0:00'; el.style.display = 'block'; }
+  if (el) { el.textContent = '0:00'; el.style.display = ''; }
   timerInterval = setInterval(() => {
     const s  = Math.floor((Date.now() - timerStart) / 1000);
-    const mm = String(Math.floor(s / 60)).padStart(1, '0');
+    const mm = String(Math.floor(s / 60));
     const ss = String(s % 60).padStart(2, '0');
     if (el) el.textContent = mm + ':' + ss;
   }, 1000);
 }
 
-function stopTimer() {
-  clearInterval(timerInterval);
-  timerInterval = null;
-}
+function stopTimer() { clearInterval(timerInterval); timerInterval = null; }
 
 /* ── Auto-step animation ── */
 let autoStepInterval = null;
@@ -280,12 +225,9 @@ function startAutoSteps() {
   }, 500);
 }
 
-function stopAutoSteps() {
-  clearInterval(autoStepInterval);
-  autoStepInterval = null;
-}
+function stopAutoSteps() { clearInterval(autoStepInterval); autoStepInterval = null; }
 
-/* ── Fetch RCA from backend (SSE) ── */
+/* ── Fetch RCA (SSE) ── */
 function fetchRCA(caseNumber) {
   let url = 'http://127.0.0.1:3001/generate-rca?caseNumber=' + encodeURIComponent(caseNumber) + '&audience=cic&template=standard';
   if (currentTemplateId) url += '&template_id=' + encodeURIComponent(currentTemplateId);
@@ -293,10 +235,7 @@ function fetchRCA(caseNumber) {
   return new Promise((resolve, reject) => {
     let settled = false;
     const done  = (fn, v) => { if (!settled) { settled = true; fn(v); } };
-
-    const timeout = setTimeout(() =>
-      done(reject, new Error('Timed out after 15 minutes.')), 900000);
-
+    const timeout = setTimeout(() => done(reject, new Error('Timed out after 15 minutes.')), 900000);
     const es = new EventSource(url);
 
     es.onerror = () => {
@@ -306,41 +245,26 @@ function fetchRCA(caseNumber) {
       }
     };
 
-    es.addEventListener('status', e => {
-      try { const d = JSON.parse(e.data); setStatus(d.msg); } catch (_) {}
-    });
-
-    es.addEventListener('console', e => {
-      try { const d = JSON.parse(e.data); consoleLog(d.line, d.kind || 'info'); } catch (_) {}
-    });
-
-    es.addEventListener('done', e => {
-      es.close(); clearTimeout(timeout);
-      try { done(resolve, JSON.parse(e.data).html); }
-      catch (_) { done(reject, new Error('Bad response from backend')); }
-    });
-
-    es.addEventListener('error', e => {
-      es.close(); clearTimeout(timeout);
-      try { done(reject, new Error(JSON.parse(e.data).message)); }
-      catch (_) { done(reject, new Error('Unknown error from backend')); }
-    });
+    es.addEventListener('status',  e => { try { const d = JSON.parse(e.data); setStatus(d.msg); } catch (_) {} });
+    es.addEventListener('console', e => { try { const d = JSON.parse(e.data); consoleLog(d.line, d.kind || 'info'); } catch (_) {} });
+    es.addEventListener('done',    e => { es.close(); clearTimeout(timeout); try { done(resolve, JSON.parse(e.data).html); } catch (_) { done(reject, new Error('Bad response')); } });
+    es.addEventListener('error',   e => { es.close(); clearTimeout(timeout); try { done(reject, new Error(JSON.parse(e.data).message)); } catch (_) { done(reject, new Error('Unknown error')); } });
   });
 }
 
-/* ── Open RCA in a full Chrome tab ── */
+/* ── Open preview tab ── */
 function openPreviewTab(htmlContent, caseNumber) {
   chrome.storage.local.set({ rcaPreviewHtml: htmlContent, rcaPreviewCase: caseNumber }, () => {
     chrome.tabs.create({ url: chrome.runtime.getURL('preview.html') });
   });
 }
 
-/* ── Console Panel ── */
+/* ── Console ── */
 document.getElementById('consoleToggle').addEventListener('click', () => {
   const panel  = document.getElementById('consolePanel');
   const toggle = document.getElementById('consoleToggle');
   const hidden = panel.classList.toggle('hidden');
-  toggle.textContent = hidden ? '▶ Show console' : '▼ Hide console';
+  toggle.textContent = hidden ? 'Show' : 'Hide';
 });
 
 function consoleLog(line, kind) {
@@ -358,10 +282,10 @@ function resetConsole() {
   const lines = document.getElementById('consoleLines');
   if (lines) lines.textContent = '';
   document.getElementById('consolePanel').classList.remove('hidden');
-  document.getElementById('consoleToggle').textContent = '▼ Hide console';
+  document.getElementById('consoleToggle').textContent = 'Hide';
 }
 
-/* ── Step Indicators ── */
+/* ── Steps ── */
 function resetSteps() {
   ['slack','orgcs','org62','gus','public','generate'].forEach(id => {
     const el = document.getElementById('step-' + id);
@@ -380,36 +304,33 @@ function setStatus(msg) {
 }
 
 function showLoadingError(msg) {
-  document.getElementById('loadingSpinner').style.display = 'none';
-  document.getElementById('loadingTitle').textContent     = 'Something went wrong';
-  document.getElementById('loadingStatus').textContent    = '';
-  document.getElementById('loadingErrorMsg').textContent  = msg;
+  document.getElementById('loadingTitle').textContent    = 'Something went wrong';
+  document.getElementById('loadingStatus').textContent   = '';
+  document.getElementById('loadingErrorMsg').textContent = msg;
   document.getElementById('loadingError').classList.remove('hidden');
+  const spinner = document.getElementById('loadingSpinner');
+  if (spinner) spinner.style.display = 'none';
 }
 function hideLoadingError() {
-  document.getElementById('loadingSpinner').style.display = '';
-  document.getElementById('loadingTitle').textContent     = 'Generating RCA';
+  document.getElementById('loadingTitle').textContent = 'Generating RCA';
   document.getElementById('loadingError').classList.add('hidden');
+  const spinner = document.getElementById('loadingSpinner');
+  if (spinner) spinner.style.display = '';
 }
 
-/* ── RCA page builder (trusted internal HTML from our backend) ── */
+/* ── Preview page builder ── */
 function buildPreviewPage(rcaBodyHtml, isDemo) {
-  const caseNum = document.getElementById('caseNumber') ? document.getElementById('caseNumber').value : '';
-  const demoBanner = isDemo
-    ? '<div class="demo-banner">⚠ <strong>Demo Mode</strong> — Sample data only. Use Generate RCA for real data.</div>'
-    : '';
-  const aiLabel   = isDemo ? '⚠ Demo Sample' : '✓ AI Generated';
+  const caseNum   = document.getElementById('caseNumber') ? document.getElementById('caseNumber').value : '';
+  const demoBanner = isDemo ? '<div class="demo-banner">⚠ <strong>Demo Mode</strong> — Sample data only.</div>' : '';
+  const aiLabel    = isDemo ? '⚠ Demo Sample' : '✓ AI Generated';
   const badgeClass = isDemo ? 'badge-orange' : 'badge-green';
 
   return [
-    '<!DOCTYPE html>',
-    '<html lang="en">',
-    '<head>',
+    '<!DOCTYPE html><html lang="en"><head>',
     '<meta charset="UTF-8"/>',
     '<title>RCA — Case ' + escHtml(caseNum) + '</title>',
     previewStyles(),
-    '</head>',
-    '<body>',
+    '</head><body>',
     tzSidebarHTML(),
     '<div class="page">',
     toolbarHTML(),
@@ -419,9 +340,7 @@ function buildPreviewPage(rcaBodyHtml, isDemo) {
     '</div>',
     demoBanner,
     '<div class="rca-body"><div id="rcaBody">' + rcaBodyHtml + '</div></div>',
-    '</div>',
-    '</body>',
-    '</html>',
+    '</div></body></html>',
   ].join('\n');
 }
 
@@ -513,95 +432,65 @@ function toolbarHTML() {
     '<span class="toolbar-brand-text">RCA Analysis</span>',
     '</div>',
     '<button class="btn btn-tz" id="btnTzToggle"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg><span id="tzLabel">PST</span></button>',
-    '<button class="btn btn-pdf"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Download PDF</button>',
-    '<button class="btn btn-gdoc" id="btnGdoc"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>Google Doc</button>',
+    '<button class="btn btn-pdf"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>PDF</button>',
+    '<button class="btn btn-gdoc" id="btnGdoc"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Google Doc</button>',
     '<button class="btn btn-edit"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Edit</button>',
-    '<div class="source-toggle"><label><input type="radio" name="srcMode" class="btn-src-on" checked/><span><span class="source-toggle-dot"></span> With Source</span></label><label><input type="radio" name="srcMode" class="btn-src-off"/><span>Without Source</span></label></div>',
+    '<div class="source-toggle"><label><input type="radio" name="srcMode" class="btn-src-on" checked/><span><span class="source-toggle-dot"></span> With Source</span></label><label><input type="radio" name="srcMode" class="btn-src-off"/><span>Without</span></label></div>',
     '</div>',
   ].join('');
 }
 
-/* ── Demo simulate steps ── */
+/* ── Demo steps simulator ── */
 function simulateSteps() {
   return new Promise(resolve => {
-    const steps   = ['slack','orgcs','org62','gus','public','generate'];
-    const msgs = [
+    const steps = ['slack','orgcs','org62','gus','public','generate'];
+    const msgs  = [
       'Searching Slack SEV channels…',
       'Loading OrgCS case data…',
       'Loading Org62 records…',
       'Searching GUS work items…',
-      'Searching Knowledge Articles & Known Issues…',
+      'Searching Knowledge Articles…',
       'Generating & validating RCA…',
     ];
     let i = 0;
     function next() {
       if (i > 0) setStep(steps[i-1], 'done');
-      if (i < steps.length) {
-        setStep(steps[i], 'active');
-        setStatus(msgs[i]);
-        i++;
-        setTimeout(next, 600);
-      } else {
-        setStep(steps[steps.length-1], 'done');
-        setTimeout(resolve, 300);
-      }
+      if (i < steps.length) { setStep(steps[i], 'active'); setStatus(msgs[i]); i++; setTimeout(next, 600); }
+      else { setStep(steps[steps.length-1], 'done'); setTimeout(resolve, 300); }
     }
     next();
   });
 }
 
-/* ── Demo RCA content ── */
+/* ── Demo RCA ── */
 function getDemoRCA(caseNumber) {
-  var cn = escHtml(caseNumber);
+  const cn = escHtml(caseNumber);
   return [
     '<h1>Root Cause Analysis — Case #' + cn + '</h1>',
     '<table><tr><th>Field</th><th>Value</th></tr>',
     '<tr><td>Account Name</td><td>GM Holdings LLC <span class="source-badge">OrgCS</span></td></tr>',
-    '<tr><td>Case # (Sev-1)</td><td>SEV1-' + cn + ' <span class="source-badge">OrgCS</span></td></tr>',
-    '<tr><td>SEV Level</td><td>SEV1 <span class="source-badge">OrgCS</span></td></tr>',
+    '<tr><td>Case #</td><td>' + cn + ' <span class="source-badge">OrgCS</span></td></tr>',
+    '<tr><td>SEV Level</td><td>SEV-1 <span class="source-badge">OrgCS</span></td></tr>',
     '<tr><td>Production Org ID</td><td>00D5g000004DEMO <span class="source-badge">OrgCS</span></td></tr>',
-    '<tr><td>Production Instance</td><td>NA147 <span class="source-badge">OrgCS</span></td></tr>',
-    '<tr><td>Time Format</td><td>PST <span class="source-badge">OrgCS</span></td></tr>',
-    '<tr><td>Case Opened (PST)</td><td><span class="tz-ts" data-utc="2026-07-07T22:22:00Z">2026-07-07 14:22 PST</span> <span class="source-badge">OrgCS</span></td></tr>',
-    '<tr><td>Sev-1 Initiated (PST)</td><td><span class="tz-ts" data-utc="2026-07-07T22:35:00Z">2026-07-07 14:35 PST</span> <span class="source-badge">Slack</span></td></tr>',
-    '<tr><td>Sev-1 Mitigated (PST)</td><td><span class="tz-ts" data-utc="2026-07-08T01:48:00Z">2026-07-07 17:48 PST</span> <span class="source-badge">Slack</span></td></tr>',
+    '<tr><td>Case Opened</td><td><span class="tz-ts" data-utc="2026-07-07T22:22:00Z">2026-07-07 22:22 UTC</span> <span class="source-badge">OrgCS</span></td></tr>',
+    '<tr><td>Sev-1 Initiated</td><td><span class="tz-ts" data-utc="2026-07-07T22:35:00Z">2026-07-07 22:35 UTC</span> <span class="source-badge">Slack</span></td></tr>',
+    '<tr><td>Sev-1 Mitigated</td><td><span class="tz-ts" data-utc="2026-07-08T01:48:00Z">2026-07-08 01:48 UTC</span> <span class="source-badge">Slack</span></td></tr>',
     '<tr><td>Success Plan</td><td>Signature Success <span class="source-badge">OrgCS</span></td></tr>',
     '<tr><td>Red Account</td><td>Yes <span class="source-badge">OrgCS</span></td></tr>',
-    '<tr><td>Slack Channel</td><td>#sev1-na147</td></tr>',
     '</table>',
-    '<h2>Executive Summary</h2>',
-    '<p>On 2026-07-07 at 14:22 PST, GM Holdings LLC reported complete login failure on NA147. All ~1,200 users received "Authentication Failed". <span class="source-badge">OrgCS</span></p>',
-    '<p>Root cause: expired SSO certificate failed to auto-renew due to AWS ACM rate limit. Engineering rotated at 17:31 PST; access restored by 17:48 PST — <strong>3h 26m total impact</strong>. <span class="source-badge">Slack: #sev1-na147</span></p>',
-    '<h2>Business Impact</h2><ul>',
+    '<h2>2. Executive Summary</h2>',
+    '<p>On 2026-07-07 at 22:22 UTC, GM Holdings LLC reported complete login failure on NA147. All ~1,200 users received "Authentication Failed".</p>',
+    '<p>Root cause: expired SSO certificate. Engineering rotated at 01:31 UTC; access restored by 01:48 UTC — <strong>3h 26m total impact</strong>.</p>',
+    '<h2>3. Business Impact</h2><ul>',
     '<li>~1,200 users unable to log in for 3h 26m <span class="source-badge">OrgCS</span></li>',
     '<li>3 advisor groups affected <span class="source-badge">Slack</span></li>',
     '<li>Signature Success SLA breach at T+60 min <span class="source-badge">Org62</span></li>',
     '</ul>',
-    '<h2>Technical Details</h2>',
-    '<p><code>INVALID_LOGIN: SSO Certificate validation failed. Certificate CN=sf-sso-prod expired 2026-07-06T23:59:59Z</code></p>',
-    '<table><tr><th>Time</th><th>Action</th><th>Owner</th></tr>',
-    '<tr><td><span class="tz-ts" data-utc="2026-07-07T22:22:00Z">14:22 PST</span></td><td>Alert fired, on-call paged</td><td>SRE</td></tr>',
-    '<tr><td><span class="tz-ts" data-utc="2026-07-07T22:35:00Z">14:35 PST</span></td><td>SEV1 declared</td><td>IC</td></tr>',
-    '<tr><td><span class="tz-ts" data-utc="2026-07-07T23:10:00Z">15:10 PST</span></td><td>Root cause identified</td><td>Auth Team</td></tr>',
-    '<tr><td><span class="tz-ts" data-utc="2026-07-08T01:31:00Z">17:31 PST</span></td><td>Certificate rotated</td><td>Auth Team</td></tr>',
-    '<tr><td><span class="tz-ts" data-utc="2026-07-08T01:48:00Z">17:48 PST</span></td><td>Login restored — SEV1 closed</td><td>IC</td></tr>',
-    '</table>',
-    '<h2>Root Cause Analysis</h2>',
-    '<p>SSO certificate expired 2026-07-06 23:59 UTC. CertRenewalJob failed silently after hitting AWS ACM rate limit. <span class="source-badge">Slack</span></p>',
-    '<p>GUS: W-12345678 — Add alerting for CertRenewalJob failures, increase expiry warning to 30 days <span class="source-badge">GUS</span></p>',
-    '<h2>Support Opportunities</h2><ul>',
-    '<li>No runbook for manual cert rotation — added 90 min to resolution <span class="source-badge">Slack</span></li>',
-    '<li>Customer not notified until T+45 min <span class="source-badge">OrgCS</span></li>',
+    '<h2>5. Root Cause Analysis</h2>',
+    '<p><strong>Primary Root Cause:</strong> SSO certificate expired 2026-07-06 23:59 UTC. CertRenewalJob failed silently after hitting AWS ACM rate limit.</p>',
+    '<h2>8. Engineering Actions</h2><ul>',
+    '<li>Add alerting for CertRenewalJob failures — Owner: Auth Platform</li>',
+    '<li>Increase cert expiry warning to 30 days — Owner: Auth Platform</li>',
     '</ul>',
-    '<h2>Customer Opportunities</h2><ul>',
-    '<li>Executive briefing with CTO within 5 business days <span class="source-badge">Org62</span></li>',
-    '<li>Written RCA within 48h per Signature Success SLA <span class="source-badge">Org62</span></li>',
-    '</ul>',
-    '<h2>Engineering Actions</h2>',
-    '<table><tr><th>Action</th><th>Owner</th><th>Due</th></tr>',
-    '<tr><td>Alert for CertRenewalJob failures</td><td>Auth Platform</td><td>2026-07-14</td></tr>',
-    '<tr><td>Increase cert expiry warning to 30 days</td><td>Auth Platform</td><td>2026-07-14</td></tr>',
-    '<tr><td>Write cert rotation runbook</td><td>SRE</td><td>2026-07-14</td></tr>',
-    '</table>',
   ].join('');
 }
