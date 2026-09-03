@@ -10,30 +10,49 @@ from http.server import BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn, TCPServer
 from urllib.parse import urlparse, parse_qs
 
+import platform as _platform
+import shutil as _shutil
+
 HOME        = os.path.expanduser('~')
 PORT        = 3001
-LOG_FILE    = os.path.join(HOME, 'Library/Application Support/rca-backend/server.log')
-SUPPORT_DIR = os.path.join(HOME, 'Library/Application Support/rca-backend')
+IS_WINDOWS  = _platform.system() == 'Windows'
+
+# Cross-platform data directory
+if IS_WINDOWS:
+    _appdata    = os.environ.get('APPDATA', os.path.join(HOME, 'AppData', 'Roaming'))
+    SUPPORT_DIR = os.path.join(_appdata, 'rca-backend')
+else:
+    SUPPORT_DIR = os.path.join(HOME, 'Library', 'Application Support', 'rca-backend')
+
+LOG_FILE = os.path.join(SUPPORT_DIR, 'server.log')
+os.makedirs(SUPPORT_DIR, exist_ok=True)
 
 def find_claude_bin():
-    """Auto-detect claude CLI — works on any Mac regardless of how it was installed."""
-    candidates = [
-        os.path.join(HOME, '.local/bin/claude'),
-        '/usr/local/bin/claude',
-        '/opt/homebrew/bin/claude',
-        '/usr/bin/claude',
-    ]
+    """Auto-detect claude CLI — cross-platform."""
+    # shutil.which respects PATH on all platforms
+    found = _shutil.which('claude') or _shutil.which('claude.cmd')
+    if found:
+        return found
+
+    if IS_WINDOWS:
+        appdata  = os.environ.get('APPDATA', '')
+        localapp = os.environ.get('LOCALAPPDATA', '')
+        candidates = [
+            os.path.join(localapp, 'npm', 'claude.cmd'),
+            os.path.join(appdata,  'npm', 'claude.cmd'),
+            os.path.join(localapp, 'npm', 'claude'),
+            os.path.join(appdata,  'npm', 'claude'),
+        ]
+    else:
+        candidates = [
+            os.path.join(HOME, '.local', 'bin', 'claude'),
+            '/usr/local/bin/claude',
+            '/opt/homebrew/bin/claude',
+            '/usr/bin/claude',
+        ]
     for p in candidates:
         if os.path.isfile(p):
             return p
-    # Fall back to PATH lookup
-    try:
-        result = subprocess.run(['which', 'claude'], capture_output=True, text=True, timeout=5)
-        path = result.stdout.strip()
-        if path and os.path.isfile(path):
-            return path
-    except Exception:
-        pass
     return None
 
 CLAUDE_BIN  = find_claude_bin()
@@ -56,34 +75,62 @@ class ThreadedHTTPServer(ThreadingMixIn, TCPServer):
     daemon_threads = True
 
 
+def _cred_cache_path():
+    return os.path.join(SUPPORT_DIR, 'credentials_cache.json')
+
+
 def read_keychain_credentials():
-    """Read the full MCP OAuth credentials blob from keychain."""
-    try:
-        result = subprocess.run(
-            ['security', 'find-generic-password', '-s', 'Claude Code-credentials', '-w'],
-            capture_output=True, text=True, timeout=5
-        )
-        if result.returncode != 0:
-            return {}
-        return json.loads(result.stdout.strip())
-    except Exception as e:
-        logging.warning(f'keychain read error: {e}')
+    """Read MCP OAuth credentials — macOS Keychain or Windows file cache."""
+    if IS_WINDOWS:
+        # On Windows, Claude Code stores credentials in APPDATA\Claude\credentials.json
+        # Try that first, then fall back to our own cache file.
+        _appdata = os.environ.get('APPDATA', os.path.join(HOME, 'AppData', 'Roaming'))
+        candidates = [
+            os.path.join(_appdata, 'Claude', 'credentials.json'),
+            os.path.join(HOME, '.claude', 'credentials.json'),
+            _cred_cache_path(),
+        ]
+        for path in candidates:
+            try:
+                with open(path) as f:
+                    return json.load(f)
+            except Exception:
+                continue
         return {}
+    else:
+        try:
+            result = subprocess.run(
+                ['security', 'find-generic-password', '-s', 'Claude Code-credentials', '-w'],
+                capture_output=True, text=True, timeout=5
+            )
+            if result.returncode != 0:
+                return {}
+            return json.loads(result.stdout.strip())
+        except Exception as e:
+            logging.warning(f'keychain read error: {e}')
+            return {}
 
 
 def write_keychain_credentials(data):
-    """Write updated credentials back to keychain."""
-    try:
-        payload = json.dumps(data)
-        subprocess.run(
-            ['security', 'add-generic-password', '-U',
-             '-s', 'Claude Code-credentials',
-             '-a', os.environ.get('USER', 'b.mohanty'),
-             '-w', payload],
-            capture_output=True, timeout=5
-        )
-    except Exception as e:
-        logging.warning(f'keychain write error: {e}')
+    """Write updated credentials — macOS Keychain or Windows file cache."""
+    if IS_WINDOWS:
+        try:
+            with open(_cred_cache_path(), 'w') as f:
+                json.dump(data, f)
+        except Exception as e:
+            logging.warning(f'credentials write error: {e}')
+    else:
+        try:
+            payload = json.dumps(data)
+            subprocess.run(
+                ['security', 'add-generic-password', '-U',
+                 '-s', 'Claude Code-credentials',
+                 '-a', os.environ.get('USER', os.environ.get('USERNAME', 'user')),
+                 '-w', payload],
+                capture_output=True, timeout=5
+            )
+        except Exception as e:
+            logging.warning(f'keychain write error: {e}')
 
 
 def refresh_slack_token(token_data, client_id):
