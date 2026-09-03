@@ -89,6 +89,79 @@ function updateMoonSun(isDark) {
 
 updateMoonSun(document.documentElement.getAttribute('data-theme') === 'dark');
 
+/* ── Template Management ── */
+let currentTemplateId = null;
+
+function showTemplateState(state) {
+  document.getElementById('templateEmpty').classList.toggle('hidden', state !== 'empty');
+  document.getElementById('templateLoaded').classList.toggle('hidden', state !== 'loaded');
+  document.getElementById('templateUploading').classList.toggle('hidden', state !== 'uploading');
+}
+
+// Load saved template on startup
+chrome.storage.local.get(['rcaTemplateId', 'rcaTemplateName'], ({ rcaTemplateId, rcaTemplateName }) => {
+  if (rcaTemplateId && rcaTemplateName) {
+    currentTemplateId = rcaTemplateId;
+    document.getElementById('templateName').textContent = rcaTemplateName;
+    showTemplateState('loaded');
+  } else {
+    showTemplateState('empty');
+  }
+});
+
+document.getElementById('templateUploadBtn').addEventListener('click', () => {
+  document.getElementById('templateFileInput').click();
+});
+
+document.getElementById('templateEmpty').addEventListener('click', (e) => {
+  if (e.target.id !== 'templateUploadBtn') {
+    document.getElementById('templateFileInput').click();
+  }
+});
+
+document.getElementById('templateFileInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  e.target.value = '';
+
+  showTemplateState('uploading');
+
+  try {
+    // Read file as base64
+    const base64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+    const res = await fetch('http://127.0.0.1:3001/set-template', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ file_name: file.name, file_data: base64 }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    currentTemplateId = data.template_id;
+    chrome.storage.local.set({ rcaTemplateId: data.template_id, rcaTemplateName: file.name });
+    document.getElementById('templateName').textContent = file.name;
+    showTemplateState('loaded');
+    showToast('Template loaded: ' + file.name, 'success');
+  } catch (err) {
+    showTemplateState('empty');
+    showToast('Template upload failed: ' + err.message, 'error');
+  }
+});
+
+document.getElementById('templateRemoveBtn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  currentTemplateId = null;
+  chrome.storage.local.remove(['rcaTemplateId', 'rcaTemplateName']);
+  showTemplateState('empty');
+  showToast('Template removed', '');
+});
+
 /* ── Settings ── */
 document.getElementById('settingsBtn').addEventListener('click', () => { checkProxyStatus(); showView('settings'); });
 document.getElementById('settingsBackBtn').addEventListener('click', () => showView('main'));
@@ -214,7 +287,8 @@ function stopAutoSteps() {
 
 /* ── Fetch RCA from backend (SSE) ── */
 function fetchRCA(caseNumber) {
-  const url = 'http://127.0.0.1:3001/generate-rca?caseNumber=' + encodeURIComponent(caseNumber) + '&audience=cic&template=standard';
+  let url = 'http://127.0.0.1:3001/generate-rca?caseNumber=' + encodeURIComponent(caseNumber) + '&audience=cic&template=standard';
+  if (currentTemplateId) url += '&template_id=' + encodeURIComponent(currentTemplateId);
 
   return new Promise((resolve, reject) => {
     let settled = false;

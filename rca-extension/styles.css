@@ -334,6 +334,142 @@ body {
 .dot-org62 { background: var(--dot-org62); }
 .dot-gus   { background: var(--dot-gus); }
 
+/* ── Template Section ── */
+.template-section {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.template-label-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.template-hint {
+  font-size: 10px;
+  color: var(--text-muted);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 1px 7px;
+  font-weight: 500;
+}
+
+.template-drop {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border: 1.5px dashed var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.template-drop:hover {
+  border-color: var(--brand);
+  background: var(--brand-glow);
+  color: var(--brand);
+}
+
+.template-drop-text {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.template-drop-sub {
+  font-size: 11px;
+  opacity: 0.7;
+  margin-left: 3px;
+}
+
+.btn-template-upload {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.btn-template-upload:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+  background: var(--brand-glow);
+}
+
+.template-loaded {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1.5px solid #B7DDB4;
+  border-radius: var(--radius-sm);
+  background: #F0F9F0;
+  font-size: 12px;
+  color: #188038;
+}
+
+[data-theme="dark"] .template-loaded {
+  background: rgba(46,132,74,0.15);
+  border-color: rgba(46,132,74,0.4);
+}
+
+.template-name {
+  flex: 1;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 180px;
+}
+
+.template-remove {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #188038;
+  font-size: 12px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  line-height: 1;
+  opacity: 0.7;
+  transition: opacity 0.15s;
+}
+
+.template-remove:hover { opacity: 1; }
+
+.template-uploading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+@keyframes templateSpin {
+  to { transform: rotate(360deg); }
+}
+
+.template-spin {
+  animation: templateSpin 1s linear infinite;
+}
+
+.hidden { display: none !important; }
+
 /* ── CTA Group ── */
 .cta-group {
   display: flex;

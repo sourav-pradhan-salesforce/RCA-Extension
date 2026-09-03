@@ -47,6 +47,10 @@ logging.basicConfig(
 )
 
 
+# In-memory template store: {template_id: {name, text}}
+TEMPLATES = {}
+
+
 class ThreadedHTTPServer(ThreadingMixIn, TCPServer):
     allow_reuse_address = True
     daemon_threads = True
@@ -218,7 +222,7 @@ def build_mcp_config(tokens):
     return cfg_path
 
 
-def build_prompt(case_number, audience, template):
+def build_prompt(case_number, audience, template, template_text=None):
     is_cic = (audience == 'cic')
 
     sections_rule = {
@@ -340,7 +344,7 @@ C. Slack — search "{case_number}", "sev {case_number}"
 
 {gus_note}"""
 
-    return f"""You are a Salesforce Senior Support Engineer. Write a concise, precise Root Cause Analysis.
+    base_prompt = f"""You are a Salesforce Senior Support Engineer. Write a concise, precise Root Cause Analysis.
 STRICT LENGTH RULE: The entire RCA must be similar in length to a 1-2 page document. Short bullet points, no padding, no repetition.
 
 TASK: Generate HTML RCA for case {case_number}.
@@ -422,6 +426,32 @@ SECTIONS (keep each one SHORT):
 
 Start output with <h1 data-default-tz="<extracted-IANA-or-America/Los_Angeles>">Root Cause Analysis — Case #{case_number}</h1> immediately."""
 
+    if template_text:
+        base_prompt += f"""
+
+══════════════════════════════════════════════════════
+TEMPLATE MODE — OVERRIDE DEFAULT FORMAT
+══════════════════════════════════════════════════════
+A custom output template has been provided. You MUST fill this template with the data you collected above.
+
+TEMPLATE RULES:
+- Follow the template's EXACT structure, section order, and headings.
+- Replace every placeholder / "[Under Investigation]" / blank field with real data from the case.
+- If a template field has no matching data, write "Not available" in that slot.
+- Keep ALL template section headers and labels exactly as they appear.
+- Preserve the template's tone (executive, customer-facing, etc.).
+- Still apply the TIMEZONE RULE: wrap every timestamp in <span class="tz-ts" data-utc="..."> tags.
+- Still apply source badges after key facts.
+- Output as clean HTML — use <h2> for every section heading from the template, <table> for tabular sections, <ul>/<li> for bullet lists.
+- Start output with <h1 data-default-tz="<IANA-tz>">{template_text[:80].split(chr(10))[0].strip()[:60]} — Case #{case_number}</h1>
+
+TEMPLATE CONTENT (fill this exactly):
+---
+{template_text[:8000]}
+---"""
+
+    return base_prompt
+
 
 def extract_html(text):
     # If Claude wrote a file path, try reading that file
@@ -476,6 +506,7 @@ class RCAHandler(BaseHTTPRequestHandler):
             case_number = params.get('caseNumber', [''])[0].strip()
             audience    = params.get('audience',   ['cic'])[0]
             template    = params.get('template',   ['standard'])[0]
+            template_id = params.get('template_id', [''])[0]
 
             if not case_number:
                 self.send_response(400)
@@ -522,7 +553,10 @@ class RCAHandler(BaseHTTPRequestHandler):
             env = get_claude_env()
 
             # Build MCP config with pre-authorised tokens
-            prompt_text = build_prompt(case_number, audience, template)
+            tmpl_text = TEMPLATES.get(template_id, {}).get('text') if template_id else None
+            if tmpl_text:
+                logging.info(f'Using template {template_id} ({len(tmpl_text)} chars)')
+            prompt_text = build_prompt(case_number, audience, template, template_text=tmpl_text)
 
             try:
                 tokens = get_mcp_oauth_tokens()
@@ -718,6 +752,70 @@ class RCAHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
+
+        if parsed.path == '/set-template':
+            length = int(self.headers.get('Content-Length', 0))
+            body   = self.rfile.read(length).decode('utf-8', errors='replace')
+            try:
+                payload = json.loads(body)
+            except Exception:
+                self.send_response(400); self.send_cors_headers(); self.end_headers()
+                self.wfile.write(json.dumps({'error': 'Invalid JSON'}).encode())
+                return
+
+            file_name = payload.get('file_name', 'template')
+            file_data_b64 = payload.get('file_data', '')
+            if not file_data_b64:
+                self.send_response(400); self.send_cors_headers(); self.end_headers()
+                self.wfile.write(json.dumps({'error': 'No file data'}).encode())
+                return
+
+            try:
+                import base64, hashlib, tempfile, io as _io
+                file_bytes = base64.b64decode(file_data_b64)
+                template_text = ''
+
+                if file_name.lower().endswith('.pdf'):
+                    try:
+                        import pdfplumber
+                        with pdfplumber.open(_io.BytesIO(file_bytes)) as pdf:
+                            pages_text = []
+                            for page in pdf.pages:
+                                t = page.extract_text()
+                                if t:
+                                    pages_text.append(t)
+                        template_text = '\n\n'.join(pages_text)
+                    except ImportError:
+                        # Fallback: write to temp file
+                        with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tf:
+                            tf.write(file_bytes)
+                            tf_path = tf.name
+                        import pdfplumber
+                        with pdfplumber.open(tf_path) as pdf:
+                            template_text = '\n\n'.join(p.extract_text() or '' for p in pdf.pages)
+                        os.unlink(tf_path)
+                else:
+                    template_text = file_bytes.decode('utf-8', errors='replace')
+
+                template_text = template_text.strip()
+                if not template_text:
+                    raise Exception('Could not extract text from file')
+
+                template_id = hashlib.md5(file_bytes).hexdigest()[:12]
+                TEMPLATES[template_id] = {'name': file_name, 'text': template_text}
+                logging.info(f'Template stored: {template_id} ({file_name}, {len(template_text)} chars)')
+
+                preview = template_text[:300]
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.send_cors_headers()
+                self.end_headers()
+                self.wfile.write(json.dumps({'template_id': template_id, 'name': file_name, 'preview': preview, 'chars': len(template_text)}).encode())
+            except Exception as e:
+                logging.error(f'Template processing error: {e}')
+                self.send_response(500); self.send_cors_headers(); self.end_headers()
+                self.wfile.write(json.dumps({'error': str(e)}).encode())
+            return
 
         if parsed.path == '/create-gdoc':
             length = int(self.headers.get('Content-Length', 0))

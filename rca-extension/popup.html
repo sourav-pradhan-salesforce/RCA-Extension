@@ -90,6 +90,37 @@
           <span class="chip"><span class="chip-dot dot-gus"></span>GUS</span>
         </div>
 
+        <!-- Template Upload -->
+        <div class="template-section">
+          <div class="template-label-row">
+            <span class="form-label">Output Template</span>
+            <span class="template-hint">optional</span>
+          </div>
+          <div id="templateEmpty" class="template-drop" id="templateDrop">
+            <input type="file" id="templateFileInput" accept=".pdf,.txt,.doc,.docx" style="display:none"/>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="12" y1="18" x2="12" y2="12"/>
+              <line x1="9" y1="15" x2="15" y2="15"/>
+            </svg>
+            <span class="template-drop-text">Upload template <span class="template-drop-sub">PDF or TXT</span></span>
+            <button class="btn-template-upload" id="templateUploadBtn">Browse</button>
+          </div>
+          <div id="templateLoaded" class="template-loaded hidden">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#188038" stroke-width="2.5">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+            </svg>
+            <span class="template-name" id="templateName">template.pdf</span>
+            <button class="template-remove" id="templateRemoveBtn" title="Remove template">✕</button>
+          </div>
+          <div id="templateUploading" class="template-uploading hidden">
+            <svg class="template-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+            <span>Processing template…</span>
+          </div>
+        </div>
+
         <!-- CTA -->
         <div class="cta-group">
           <button class="btn-generate" id="generateBtn">
