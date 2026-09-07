@@ -1,3 +1,8 @@
+// HTML captured at page-load time — used by Google Doc so re-generating a
+// new RCA in another tab doesn't overwrite what this page shows.
+let _thisPageHtml = null;
+let _thisPageCase = null;
+
 // Edit toggle
 function toggleEdit(btn) {
   const body = document.getElementById('rcaBody');
@@ -109,9 +114,10 @@ async function createGoogleDoc(btn) {
   const origText = btn.innerHTML;
   btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Creating…';
   try {
-    const { rcaPreviewHtml, rcaPreviewCase } = await new Promise(r =>
-      chrome.storage.local.get(['rcaPreviewHtml', 'rcaPreviewCase'], r)
-    );
+    // Use page-load snapshot — never re-read storage (would pick up latest RCA, not this one)
+    const rcaPreviewHtml = _thisPageHtml;
+    const rcaPreviewCase = _thisPageCase;
+    if (!rcaPreviewHtml) throw new Error('No RCA content found on this page.');
     const res = await fetch('http://127.0.0.1:3001/create-gdoc', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -167,6 +173,10 @@ document.addEventListener('change', function(e) {
 
 // ── Load RCA from storage ──────────────────────────────────────
 chrome.storage.local.get(['rcaPreviewHtml', 'rcaPreviewCase'], ({ rcaPreviewHtml, rcaPreviewCase }) => {
+  // Snapshot at load — isolates this tab from future storage overwrites
+  _thisPageHtml = rcaPreviewHtml || null;
+  _thisPageCase = rcaPreviewCase || null;
+
   if (!rcaPreviewHtml) {
     document.getElementById('loading').innerHTML =
       '<p style="color:#BA0517;padding:40px;font-size:14px;">No RCA found. Generate one first.</p>';
