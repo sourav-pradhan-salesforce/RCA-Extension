@@ -241,9 +241,33 @@ def get_claude_env():
     return env
 
 
+def _read_plugin_server(plugin_name):
+    """Read latest active .mcp.json for a plugin — returns {server_name: cfg} or {}."""
+    import glob as _glob
+    pattern = os.path.join(HOME, f'.claude/plugins/cache/aisuite/{plugin_name}/*/.mcp.json')
+    # Exclude orphaned entries
+    candidates = [
+        p for p in sorted(_glob.glob(pattern), key=os.path.getmtime, reverse=True)
+        if not os.path.exists(os.path.join(os.path.dirname(p), '.orphaned_at'))
+    ]
+    for p in candidates:
+        try:
+            with open(p) as f:
+                d = json.load(f)
+            servers = d.get('mcpServers', {})
+            if servers:
+                logging.info(f'Plugin {plugin_name}: loaded from {p}')
+                return servers
+        except Exception as e:
+            logging.warning(f'Plugin {plugin_name} read error ({p}): {e}')
+    return {}
+
+
 def build_mcp_config(tokens):
-    """Build mcp_config.json from .claude.json only (no plugins — plugins load automatically).
-    Including plugin servers here creates duplicate server conflicts that break tool calls."""
+    """Build mcp_config.json.
+    - stdio servers from .claude.json (non-HTTP)
+    - Plugin servers (slack, google-workspace, gus, orgcs, Org62) injected from plugin cache
+      so subprocess has live authenticated connections."""
     cfg_path = os.path.join(SUPPORT_DIR, 'mcp_config.json')
     base_cfg = {}
     try:
@@ -257,11 +281,18 @@ def build_mcp_config(tokens):
 
     servers = {}
     for name, cfg in base_cfg.items():
-        # Only include stdio servers in mcp_config — HTTP/OAuth servers (orgcs, Org62-Sobject-Read)
-        # are handled by plugins which auto-refresh tokens. Including them here causes stale-token auth failures.
         if cfg.get('type') == 'http':
             continue
         servers[name] = cfg
+
+    # Inject plugin servers from cache (these have live Bearer tokens).
+    # Plugin versions override stdio stubs with the same name — plugin has fresh auth.
+    for plugin in ('slack', 'google-workspace', 'dxmcp-gus', 'orgcs', 'Org62-Sobject-Read'):
+        plugin_servers = _read_plugin_server(plugin)
+        for sname, scfg in plugin_servers.items():
+            if sname in servers:
+                logging.info(f'Plugin {plugin}: overriding existing {sname} with plugin version')
+            servers[sname] = scfg
 
     with open(cfg_path, 'w') as f:
         json.dump({'mcpServers': servers}, f)
@@ -269,7 +300,156 @@ def build_mcp_config(tokens):
     return cfg_path
 
 
-def build_prompt(case_number, audience, template, template_text=None):
+def call_plugin_mcp(plugin_name, tool, arguments, timeout=20):
+    """Call a plugin MCP tool directly via the local devbar proxy."""
+    import glob as _glob
+    token = '0d238fe9-9184-4264-aac8-1c6f28ea8ad7'
+    pattern = os.path.join(HOME, f'.claude/plugins/cache/aisuite/{plugin_name}/*/.mcp.json')
+    candidates = [
+        p for p in sorted(_glob.glob(pattern), key=os.path.getmtime, reverse=True)
+        if not os.path.exists(os.path.join(os.path.dirname(p), '.orphaned_at'))
+    ]
+    for p in candidates:
+        try:
+            with open(p) as f:
+                cfg = json.load(f)
+            t = cfg.get('mcpServers', {}).get(plugin_name.split('@')[0], {}).get('headers', {}).get('Authorization', '')
+            if t.startswith('Bearer '):
+                token = t[7:]
+                break
+        except Exception:
+            pass
+
+    url = f'http://127.0.0.1:29051/mcp/servers/{plugin_name}'
+    body = json.dumps({'jsonrpc': '2.0', 'method': 'tools/call', 'id': 1,
+                       'params': {'name': tool, 'arguments': arguments}}).encode()
+    req = urllib.request.Request(url, data=body, method='POST', headers={
+        'Authorization': f'Bearer {token}',
+        'Content-Type': 'application/json',
+        'Accept': 'application/json, text/event-stream',
+    })
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        result = json.loads(resp.read())
+    content = result.get('result', {}).get('content', [])
+    if isinstance(content, list) and content:
+        return content[0].get('text', '')
+    return str(result)
+
+
+def _extract_text_from_mcp(raw):
+    """Parse MCP tool result — handles plain text and JSON content arrays."""
+    if isinstance(raw, str):
+        try:
+            d = json.loads(raw)
+            content = d.get('result', {}).get('content', [])
+            if content:
+                return content[0].get('text', raw)
+        except Exception:
+            pass
+    return str(raw)
+
+
+def prefetch_slack_and_gus(case_number, account_name):
+    """
+    Server-side pre-fetch of Slack channel + GUS work items.
+    Returns dict: {channel_id, channel_name, channel_url, messages_summary, gus_items}
+    """
+    import re as _re
+
+    result = {
+        'channel_id': None, 'channel_name': None, 'channel_url': None,
+        'messages_summary': '', 'gus_items': [], 'error': None,
+    }
+
+    # ── 1. Find SEV1 channel by name pattern ────────────────────────────────
+    # Pattern: sev1-<account-slug>-<case_number>
+    # Build slug: lowercase, replace non-alphanumeric with hyphens, collapse hyphens
+    slug = _re.sub(r'[^a-z0-9]+', '-', account_name.lower()).strip('-')
+    channel_query = f'sev1-{slug}-{case_number}'
+    logging.info(f'Prefetch: searching Slack channel "{channel_query}"')
+
+    try:
+        raw = call_plugin_mcp('slack', 'slack_search_channels', {'query': channel_query, 'limit': 5})
+        # Try to extract channel ID/name from result
+        channel_id = None
+        channel_name = None
+        # Parse JSON or text
+        try:
+            data = json.loads(raw) if isinstance(raw, str) else raw
+            channels = data if isinstance(data, list) else data.get('channels', [])
+            for ch in channels:
+                cname = ch.get('name', '')
+                if case_number in cname or slug[:10] in cname:
+                    channel_id = ch.get('id') or ch.get('channelId')
+                    channel_name = cname
+                    break
+                if not channel_id and channels:
+                    channel_id = channels[0].get('id') or channels[0].get('channelId')
+                    channel_name = channels[0].get('name', '')
+        except Exception:
+            # Try regex on raw text
+            m = _re.search(r'"id"\s*:\s*"(C[A-Z0-9]+)".*?"name"\s*:\s*"([^"]+)"', str(raw), _re.DOTALL)
+            if m:
+                channel_id, channel_name = m.group(1), m.group(2)
+        logging.info(f'Prefetch: channel search result — id={channel_id} name={channel_name}')
+    except Exception as e:
+        logging.warning(f'Prefetch: channel search failed: {e}')
+        result['error'] = str(e)
+
+    # Fallback: search by case number in messages
+    if not channel_id:
+        try:
+            raw = call_plugin_mcp('slack', 'slack_search_public_and_private',
+                                   {'query': case_number, 'limit': 10})
+            m = _re.search(r'C[A-Z0-9]{8,}', str(raw))
+            if m:
+                channel_id = m.group(0)
+                channel_name = f'sev1-{slug}-{case_number}'
+            logging.info(f'Prefetch: message search fallback — channel_id={channel_id}')
+        except Exception as e:
+            logging.warning(f'Prefetch: message search fallback failed: {e}')
+
+    if channel_id:
+        result['channel_id'] = channel_id
+        result['channel_name'] = channel_name or f'sev1-{slug}-{case_number}'
+        result['channel_url'] = f'https://salesforce.enterprise.slack.com/archives/{channel_id}'
+
+        # ── 2. Read channel history ──────────────────────────────────────────
+        try:
+            raw = call_plugin_mcp('slack', 'slack_read_channel',
+                                   {'channel_id': channel_id, 'limit': 50}, timeout=30)
+            result['messages_summary'] = str(raw)[:6000]
+            logging.info(f'Prefetch: read {len(str(raw))} chars from channel {channel_id}')
+        except Exception as e:
+            logging.warning(f'Prefetch: channel read failed: {e}')
+            try:
+                raw = call_plugin_mcp('slack', 'slack_get_channel_history',
+                                       {'channel_id': channel_id, 'limit': 50}, timeout=30)
+                result['messages_summary'] = str(raw)[:6000]
+            except Exception as e2:
+                logging.warning(f'Prefetch: channel history fallback failed: {e2}')
+
+    # ── 3. Extract W-numbers from Slack messages ─────────────────────────────
+    w_numbers = list(dict.fromkeys(_re.findall(r'W-\d{6,}', result['messages_summary'])))
+    logging.info(f'Prefetch: W-numbers from Slack: {w_numbers}')
+
+    # ── 4. Query GUS for each W-number ───────────────────────────────────────
+    for wnum in w_numbers[:5]:
+        try:
+            raw = call_plugin_mcp('dxmcp-gus', 'query_gus_records', {
+                'query': f"SELECT Id,Name,Subject__c,Status__c,Priority__c,Type__c,Assignee__r.Name,Product_Tag__r.Name,Scheduled_Build__c FROM ADM_Work__c WHERE Name='{wnum}' LIMIT 1"
+            }, timeout=20)
+            if raw and wnum in str(raw):
+                result['gus_items'].append({'wnum': wnum, 'data': str(raw)[:800]})
+                logging.info(f'Prefetch: GUS item found for {wnum}')
+        except Exception as e:
+            logging.warning(f'Prefetch: GUS query failed for {wnum}: {e}')
+
+    logging.info(f'Prefetch complete: channel={result["channel_id"]}, gus_items={len(result["gus_items"])}')
+    return result
+
+
+def build_prompt(case_number, audience, template, template_text=None, prefetch=None):
     is_cic = (audience == 'cic')
 
     sections_rule = {
@@ -371,25 +551,61 @@ A3. OrgCS comments:
    FROM Account WHERE Id='<AccountId>' LIMIT 1
    (Support_Level__c and Open_Red_Account__c are NOT on Org62 Account — skip them)"""
 
+    # Build Slack + GUS section from pre-fetched data if available
+    if prefetch and prefetch.get('channel_id'):
+        ch_id   = prefetch['channel_id']
+        ch_name = prefetch['channel_name'] or f'sev1-channel-{case_number}'
+        ch_url  = prefetch['channel_url']
+        msgs    = prefetch.get('messages_summary', '')
+        gus_pre = prefetch.get('gus_items', [])
+
+        slack_section = f"""C. Slack — PRE-FETCHED (do NOT call Slack MCP tools):
+   Channel: #{ch_name} (ID: {ch_id})
+   URL: {ch_url}
+   Messages (first 6000 chars):
+{msgs[:6000]}
+
+   USE this data for: first alert time, error messages, actions taken, resolution time.
+   Channel link for RCA: <a href="{ch_url}" target="_blank" class="source-link">#{ch_name} ↗</a>"""
+
+        if gus_pre:
+            gus_items_text = '\n'.join(
+                f'   {g["wnum"]}:\n{g["data"][:600]}' for g in gus_pre
+            )
+            gus_section = f"""D. GUS — PRE-FETCHED (do NOT call GUS MCP tools):
+{gus_items_text}
+
+   For each W-number above, build the GUS link:
+   <a href="https://gus.lightning.force.com/lightning/r/ADM_Work__c/<Id>/view" target="_blank" class="source-link">W-XXXXXXX ↗</a>
+   Include Subject, Status, Priority, Assignee, Scheduled_Build__c in the RCA.
+   Also scan OrgCS comments (A3) for additional W-numbers and query GUS for those too."""
+        else:
+            gus_section = f"""D. GUS — no items pre-fetched from Slack. Search OrgCS comments (A3) for W-\\d+ patterns.
+   {gus_note}"""
+    else:
+        slack_section = f"""C. Slack — scan OrgCS comments (A3) for Slack channel URLs or IDs first.
+   If found, use that channel ID directly.
+   Otherwise search messages: "{case_number}", "sev {case_number}"
+   Try mcp__plugin_slack_slack__slack_search_public_and_private; on error skip Slack and write "Not found".
+   Record EXACT channel ID and name."""
+        gus_section = f"""D. {gus_note[3:]}"""  # strip leading "D. " already in gus_note
+
     if is_cic:
         data_steps = f"""{orgcs_core}
 
 {org62_query}
 
-C. Slack — search "{case_number}", "sev {case_number}", "swarm {case_number}"
-   Record EXACT channel ID (e.g. C0BEQTQL5TL) and name. Read channel for:
-   first alert time, error messages, actions taken, resolution time.
+{slack_section}
 
-{gus_note}"""
+{gus_section}"""
     else:
         data_steps = f"""{orgcs_non_cic}
 
 {org62_query}
 
-C. Slack — search "{case_number}", "sev {case_number}"
-   Record EXACT channel ID and name. Get: first alert time, resolution time, key actions.
+{slack_section}
 
-{gus_note}"""
+{gus_section}"""
 
     base_prompt = f"""You are a Salesforce Senior Support Engineer. Write a concise, precise Root Cause Analysis.
 STRICT LENGTH RULE: The entire RCA must be similar in length to a 1-2 page document. Short bullet points, no padding, no repetition.
@@ -457,7 +673,7 @@ SECTIONS (keep each one SHORT):
    Sev-1 Mitigated (AX_Sev1_End_Time__c as tz-ts span — if null write "Open — not yet mitigated" in orange) |
    Success Plan (Case_Support_level__c) |
    Red Account (Open_Red_Account__c) |
-   Slack Channel (channel name as clickable link ONLY — no source badges, no parenthetical notes about auth or source; if channel unknown write "Not found") |
+   Slack Channel (channel name as clickable link ONLY — NEVER add any text after the link; if channel unknown write ONLY the two words "Not found" with nothing else) |
    GUS Investigation (W-number as GUS link + " — Status: <status>" + GUS badge; if none write "None linked") |
    Case Owner (Owner.Name from A1 + Sev-1 assignee name if available from Slack, format "Primary / Sev-1 Name") |
    Case Status (Status from A1, color-coded per STATUS COLOR RULE above)
@@ -594,8 +810,41 @@ class RCAHandler(BaseHTTPRequestHandler):
                 done_event.set()
                 return
 
-            sse_write('status', {'step': 'slack', 'msg': 'Searching Slack SEV channels & swarm threads…'})
             logging.info(f'Starting RCA for case {case_number}, audience={audience}')
+
+            # ── Server-side Slack + GUS pre-fetch (bypasses subprocess MCP issues) ──
+            sse_write('status', {'step': 'slack', 'msg': 'Searching Slack SEV channel…'})
+            prefetch_data = None
+            try:
+                # We need account name for channel slug — fetch it from OrgCS first
+                # Quick orgcs call to get account name
+                account_name = ''
+                try:
+                    orgcs_raw = call_plugin_mcp('orgcs', 'soqlQuery', {
+                        'query': f"SELECT Account.Name FROM Case WHERE CaseNumber='{case_number}' LIMIT 1"
+                    }, timeout=15)
+                    import re as _re
+                    m = _re.search(r'"Name"\s*:\s*"([^"]+)"', str(orgcs_raw))
+                    if m:
+                        account_name = m.group(1)
+                        logging.info(f'Pre-fetch account name: {account_name}')
+                except Exception as e:
+                    logging.warning(f'Pre-fetch account name lookup failed: {e}')
+
+                prefetch_data = prefetch_slack_and_gus(case_number, account_name or case_number)
+                if prefetch_data.get('channel_id'):
+                    sse_write('status', {'step': 'slack', 'msg': f'Slack channel found: #{prefetch_data["channel_name"]}'})
+                    sse_write('console', {'line': f'→ Slack  #{prefetch_data["channel_name"]} ({prefetch_data["channel_id"]})', 'kind': 'tool'})
+                    sse_write('console', {'line': f'   ✓ {len(prefetch_data.get("messages_summary",""))} chars fetched', 'kind': 'result'})
+                    if prefetch_data.get('gus_items'):
+                        sse_write('status', {'step': 'gus', 'msg': f'GUS: {len(prefetch_data["gus_items"])} work item(s) found'})
+                        for g in prefetch_data['gus_items']:
+                            sse_write('console', {'line': f'→ GUS    {g["wnum"]}', 'kind': 'tool'})
+                else:
+                    sse_write('console', {'line': f'   ✗ Slack channel not found via pre-fetch', 'kind': 'error'})
+            except Exception as e:
+                logging.warning(f'Pre-fetch failed: {e}')
+                sse_write('console', {'line': f'   ✗ Pre-fetch error: {str(e)[:80]}', 'kind': 'error'})
 
             env = get_claude_env()
 
@@ -603,7 +852,8 @@ class RCAHandler(BaseHTTPRequestHandler):
             tmpl_text = TEMPLATES.get(template_id, {}).get('text') if template_id else None
             if tmpl_text:
                 logging.info(f'Using template {template_id} ({len(tmpl_text)} chars)')
-            prompt_text = build_prompt(case_number, audience, template, template_text=tmpl_text)
+            prompt_text = build_prompt(case_number, audience, template,
+                                       template_text=tmpl_text, prefetch=prefetch_data)
 
             try:
                 tokens = get_mcp_oauth_tokens()
