@@ -336,6 +336,93 @@ def call_plugin_mcp(plugin_name, tool, arguments, timeout=20):
     return str(result)
 
 
+def _get_ssl_context():
+    """Build SSL context: certifi root CAs + corporate CA bundle."""
+    import ssl
+    ctx = ssl.create_default_context()
+    try:
+        import certifi
+        ctx.load_verify_locations(certifi.where())
+    except ImportError:
+        pass
+    ca_path = os.path.join(HOME, '.devbar/certs/corporate-ca-bundle.pem')
+    if os.path.isfile(ca_path):
+        ctx.load_verify_locations(ca_path)
+    return ctx
+
+
+def _orgcs_mcp_call(tool_name, arguments, timeout=20):
+    """Call OrgCS MCP with proper initialize→tools/call session handshake."""
+    creds = read_keychain_credentials()
+    token = ''
+    for key, val in creds.get('mcpOAuth', {}).items():
+        if key.split('|')[0] == 'orgcs' and isinstance(val, dict):
+            token = val.get('accessToken', '')
+            break
+    if not token:
+        raise Exception('OrgCS token not found in keychain')
+
+    url = 'https://api.salesforce.com/platform/mcp/v1/platform/sobject-reads'
+    ctx = _get_ssl_context()
+    headers = {
+        'Authorization': f'Bearer {token}',
+        'Content-Type': 'application/json',
+        'Accept': 'application/json, text/event-stream',
+    }
+
+    def post(body_dict):
+        req = urllib.request.Request(url, data=json.dumps(body_dict).encode(),
+                                     method='POST', headers=headers)
+        with urllib.request.urlopen(req, timeout=timeout, context=ctx) as r:
+            # Capture session key from response headers if present
+            session_key = r.headers.get('mcp-session-id') or r.headers.get('x-session-key') or ''
+            data = json.loads(r.read())
+            return data, session_key
+
+    # Step 1: initialize
+    init_msg = {
+        'jsonrpc': '2.0', 'id': 0, 'method': 'initialize',
+        'params': {
+            'protocolVersion': '2024-11-05',
+            'capabilities': {},
+            'clientInfo': {'name': 'rca-backend', 'version': '1.0'},
+        }
+    }
+    init_result, session_key = post(init_msg)
+    logging.info(f'OrgCS init: session_key={session_key!r} result_keys={list(init_result.keys())}')
+
+    # Add session key to headers if returned
+    if session_key:
+        headers['mcp-session-id'] = session_key
+
+    # Step 2: initialized notification (no response expected, fire and forget)
+    try:
+        post({'jsonrpc': '2.0', 'method': 'notifications/initialized', 'params': {}})
+    except Exception:
+        pass
+
+    # Step 3: tools/call
+    call_msg = {
+        'jsonrpc': '2.0', 'id': 1, 'method': 'tools/call',
+        'params': {'name': tool_name, 'arguments': arguments}
+    }
+    result, _ = post(call_msg)
+    content = result.get('result', {}).get('content', [])
+    if isinstance(content, list) and content:
+        return content[0].get('text', str(result))
+    return str(result)
+
+
+def call_orgcs_soql(soql, timeout=20):
+    """Call OrgCS MCP soqlQuery with session handshake. Parameter is 'q'."""
+    return _orgcs_mcp_call('soqlQuery', {'q': soql}, timeout=timeout)
+
+
+def call_gus_soql(soql, timeout=20):
+    """Call GUS MCP query_gus_records via devbar proxy."""
+    return call_plugin_mcp('dxmcp-gus', 'query_gus_records', {'soql': soql}, timeout=timeout)
+
+
 def _extract_text_from_mcp(raw):
     """Parse MCP tool result — handles plain text and JSON content arrays."""
     if isinstance(raw, str):
@@ -459,21 +546,63 @@ def prefetch_slack_and_gus(case_number, account_name):
             except Exception as e2:
                 logging.warning(f'Prefetch: channel history fallback failed: {e2}')
 
-    # ── 3. Extract W-numbers from Slack messages ─────────────────────────────
-    w_numbers = list(dict.fromkeys(_re.findall(r'W-\d{6,}', result['messages_summary'])))
-    logging.info(f'Prefetch: W-numbers from Slack: {w_numbers}')
+    # ── 3. Get W-numbers from OrgCS CaseBug__c junction (primary source) ───────
+    w_numbers_orgcs = []
+    case_id = ''
+    try:
+        raw = call_orgcs_soql(f"SELECT Id FROM Case WHERE CaseNumber='{case_number}' LIMIT 1")
+        id_match = _re.search(r'"Id"\s*:\s*"([0-9A-Za-z]{15,18})"', str(raw))
+        if id_match:
+            case_id = id_match.group(1)
+            raw2 = call_orgcs_soql(
+                f"SELECT ADM_Work__c, ADM_Work__r.Name FROM CaseBug__c WHERE Case__c='{case_id}' LIMIT 10"
+            )
+            w_numbers_orgcs = list(dict.fromkeys(_re.findall(r'W-\d{6,}', str(raw2))))
+            logging.info(f'Prefetch: W-numbers from CaseBug__c: {w_numbers_orgcs}')
+    except Exception as e:
+        logging.warning(f'Prefetch: CaseBug__c query failed: {e}')
 
-    # ── 4. Query GUS for each W-number ───────────────────────────────────────
-    for wnum in w_numbers[:5]:
+    # ── 4. Extract W-numbers from OrgCS comments ─────────────────────────────
+    w_numbers_comments = []
+    if case_id:
         try:
-            raw = call_plugin_mcp('dxmcp-gus', 'query_gus_records', {
-                'query': f"SELECT Id,Name,Subject__c,Status__c,Priority__c,Type__c,Assignee__r.Name,Product_Tag__r.Name,Scheduled_Build__c FROM ADM_Work__c WHERE Name='{wnum}' LIMIT 1"
-            }, timeout=20)
+            raw = call_orgcs_soql(
+                f"SELECT CommentBody FROM CaseComment WHERE ParentId='{case_id}' ORDER BY CreatedDate ASC LIMIT 30"
+            )
+            w_numbers_comments = list(dict.fromkeys(_re.findall(r'W-\d{6,}', str(raw))))
+            logging.info(f'Prefetch: W-numbers from comments: {w_numbers_comments}')
+        except Exception as e:
+            logging.warning(f'Prefetch: comment scan failed: {e}')
+
+    # ── 5. Extract W-numbers from Slack messages ──────────────────────────────
+    w_numbers_slack = list(dict.fromkeys(_re.findall(r'W-\d{6,}', result['messages_summary'])))
+    logging.info(f'Prefetch: W-numbers from Slack: {w_numbers_slack}')
+
+    # Merge all W-numbers, CaseBug__c first (most authoritative)
+    seen = set()
+    w_numbers = []
+    for w in w_numbers_orgcs + w_numbers_comments + w_numbers_slack:
+        if w not in seen:
+            seen.add(w)
+            w_numbers.append(w)
+    logging.info(f'Prefetch: total unique W-numbers: {w_numbers}')
+
+    # ── 6. Query GUS for each W-number ───────────────────────────────────────
+    for wnum in w_numbers[:8]:
+        try:
+            raw = call_gus_soql(
+                f"SELECT Id,Name,Subject__c,Status__c,Priority__c,Type__c,Assignee__r.Name,Product_Tag__r.Name,Scheduled_Build__c FROM ADM_Work__c WHERE Name='{wnum}' LIMIT 1"
+            )
             if raw and wnum in str(raw):
                 result['gus_items'].append({'wnum': wnum, 'data': str(raw)[:800]})
                 logging.info(f'Prefetch: GUS item found for {wnum}')
+            else:
+                # Still record the W-number even if GUS query returned nothing
+                result['gus_items'].append({'wnum': wnum, 'data': str(raw)[:400]})
+                logging.warning(f'Prefetch: GUS query for {wnum} returned no match: {str(raw)[:100]}')
         except Exception as e:
             logging.warning(f'Prefetch: GUS query failed for {wnum}: {e}')
+            result['gus_items'].append({'wnum': wnum, 'data': f'GUS query error: {e}'})
 
     logging.info(f'Prefetch complete: channel={result["channel_id"]}, gus_items={len(result["gus_items"])}')
     return result
@@ -800,6 +929,10 @@ class RCAHandler(BaseHTTPRequestHandler):
             audience    = params.get('audience',   ['cic'])[0]
             template    = params.get('template',   ['standard'])[0]
             template_id = params.get('template_id', [''])[0]
+            gus_items_raw = params.get('gusItems', [''])[0].strip()
+            # Parse comma-separated W-numbers from user input
+            import re as _re2
+            manual_w_numbers = [w.strip() for w in _re2.split(r'[\s,;]+', gus_items_raw) if _re2.match(r'W-\d+', w.strip())] if gus_items_raw else []
 
             if not case_number:
                 self.send_response(400)
@@ -850,9 +983,9 @@ class RCAHandler(BaseHTTPRequestHandler):
                 # Quick orgcs call to get account name
                 account_name = ''
                 try:
-                    orgcs_raw = call_plugin_mcp('orgcs', 'soqlQuery', {
-                        'query': f"SELECT Account.Name FROM Case WHERE CaseNumber='{case_number}' LIMIT 1"
-                    }, timeout=15)
+                    orgcs_raw = call_orgcs_soql(
+                        f"SELECT Account.Name FROM Case WHERE CaseNumber='{case_number}' LIMIT 1"
+                    )
                     import re as _re
                     m = _re.search(r'"Name"\s*:\s*"([^"]+)"', str(orgcs_raw))
                     if m:
@@ -862,16 +995,33 @@ class RCAHandler(BaseHTTPRequestHandler):
                     logging.warning(f'Pre-fetch account name lookup failed: {e}')
 
                 prefetch_data = prefetch_slack_and_gus(case_number, account_name or case_number)
+
+                # Merge manually-entered W-numbers (query GUS for any not already found)
+                if manual_w_numbers:
+                    sse_write('console', {'line': f'→ GUS    manual W-numbers: {manual_w_numbers}', 'kind': 'tool'})
+                    existing_wnums = {g['wnum'] for g in prefetch_data.get('gus_items', [])}
+                    for wnum in manual_w_numbers:
+                        if wnum not in existing_wnums:
+                            try:
+                                raw = call_gus_soql(
+                                    f"SELECT Id,Name,Subject__c,Status__c,Priority__c,Type__c,Assignee__r.Name,Product_Tag__r.Name,Scheduled_Build__c FROM ADM_Work__c WHERE Name='{wnum}' LIMIT 1"
+                                )
+                                prefetch_data['gus_items'].append({'wnum': wnum, 'data': str(raw)[:800]})
+                                sse_write('console', {'line': f'   ✓ GUS {wnum} fetched', 'kind': 'result'})
+                            except Exception as e:
+                                prefetch_data['gus_items'].append({'wnum': wnum, 'data': f'GUS error: {e}'})
+
                 if prefetch_data.get('channel_id'):
                     sse_write('status', {'step': 'slack', 'msg': f'Slack channel found: #{prefetch_data["channel_name"]}'})
                     sse_write('console', {'line': f'→ Slack  #{prefetch_data["channel_name"]} ({prefetch_data["channel_id"]})', 'kind': 'tool'})
                     sse_write('console', {'line': f'   ✓ {len(prefetch_data.get("messages_summary",""))} chars fetched', 'kind': 'result'})
-                    if prefetch_data.get('gus_items'):
-                        sse_write('status', {'step': 'gus', 'msg': f'GUS: {len(prefetch_data["gus_items"])} work item(s) found'})
-                        for g in prefetch_data['gus_items']:
-                            sse_write('console', {'line': f'→ GUS    {g["wnum"]}', 'kind': 'tool'})
                 else:
-                    sse_write('console', {'line': f'   ✗ Slack channel not found via pre-fetch', 'kind': 'error'})
+                    sse_write('console', {'line': '   ✗ Slack channel not found via pre-fetch', 'kind': 'error'})
+
+                if prefetch_data.get('gus_items'):
+                    sse_write('status', {'step': 'gus', 'msg': f'GUS: {len(prefetch_data["gus_items"])} work item(s) found'})
+                    for g in prefetch_data['gus_items']:
+                        sse_write('console', {'line': f'→ GUS    {g["wnum"]}', 'kind': 'tool'})
             except Exception as e:
                 logging.warning(f'Pre-fetch failed: {e}')
                 sse_write('console', {'line': f'   ✗ Pre-fetch error: {str(e)[:80]}', 'kind': 'error'})

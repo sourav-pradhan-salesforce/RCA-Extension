@@ -231,6 +231,8 @@ function stopAutoSteps() { clearInterval(autoStepInterval); autoStepInterval = n
 function fetchRCA(caseNumber) {
   let url = 'http://127.0.0.1:3001/generate-rca?caseNumber=' + encodeURIComponent(caseNumber) + '&audience=cic&template=standard';
   if (currentTemplateId) url += '&template_id=' + encodeURIComponent(currentTemplateId);
+  const gusRaw = (document.getElementById('gusItems')?.value || '').trim();
+  if (gusRaw) url += '&gusItems=' + encodeURIComponent(gusRaw);
 
   return new Promise((resolve, reject) => {
     let settled = false;
