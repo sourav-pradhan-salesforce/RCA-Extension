@@ -473,55 +473,103 @@ def prefetch_slack_and_gus(case_number, account_name):
     channel_id = None
     channel_name = None
 
-    def parse_channel_result(raw):
-        """Extract (channel_id, channel_name) from slack_search_channels result."""
+    def parse_channel_result(raw, match_case_number=None):
+        """Extract (channel_id, channel_name) from slack_search_channels result.
+        Result is a JSON object with a 'results' key containing markdown text.
+        Markdown format:
+          Name: #sev1-account-name-123456
+          Permalink: [link](https://...slack.com/archives/CXXXXXXXX)
+        """
+        # Unwrap JSON envelope to get the markdown string
         try:
-            data = json.loads(raw) if isinstance(raw, str) else raw
-            # Handle error responses
-            if isinstance(data, dict) and data.get('error'):
-                raise Exception(data['error'])
-            channels = data if isinstance(data, list) else data.get('channels', data.get('result', {}).get('channels', []))
-            if not isinstance(channels, list):
-                raise ValueError('no channels list')
-            # Prefer channel whose name contains the case number
-            for ch in channels:
-                cid  = ch.get('id') or ch.get('channelId') or ch.get('channel_id', '')
-                cname = ch.get('name', '')
-                if case_number in cname and cid:
-                    return cid, cname
-            # Fallback: first result
-            if channels:
-                c = channels[0]
-                return (c.get('id') or c.get('channelId') or ''), c.get('name', '')
+            if isinstance(raw, str):
+                d = json.loads(raw)
+                text = d.get('results', str(raw))
+            else:
+                text = str(raw)
         except Exception:
-            pass
-        # Regex fallback on raw text
-        m = _re.search(r'["\']id["\']\s*:\s*["\']([A-Z0-9]{9,})["\']', str(raw))
-        n = _re.search(r'["\']name["\']\s*:\s*["\']([^"\']+)["\']', str(raw))
-        return (m.group(1) if m else None), (n.group(1) if n else None)
+            text = str(raw)
+
+        # Extract name/id pairs from markdown (text is now unescaped)
+        names = _re.findall(r'Name:\s*#([^\n]+)', text)
+        ids   = _re.findall(r'archives/([A-Z0-9]{8,})', text)
+        pairs = list(zip(names, ids))
+
+        if not pairs:
+            return None, None
+
+        if match_case_number:
+            for cname, cid in pairs:
+                if match_case_number in cname:
+                    return cid, cname.strip()
+            return None, None  # no match for this case number — don't use wrong channel
+        return pairs[0][1], pairs[0][0].strip()
+
+    # Search by account slug only (case number at end often yields no results)
+    # Truncate slug to first 2-3 meaningful words for broader match
+    slug_words = [w for w in _re.split(r'[-_]', slug) if w and len(w) > 1]
+    search_slug = '-'.join(slug_words[:4]) if slug_words else slug[:20]
+    # Try multiple queries: account slug alone (broad), then case number alone, then combined
+    queries = []
+    if slug:
+        queries.append(f'sev1-{search_slug}')      # broad: finds all channels for this account
+    queries.append(f'sev1-{case_number}')           # narrow: case number might be indexed
+    if slug:
+        queries.append(f'{search_slug} {case_number}')  # combined keyword search
+
+    logging.info(f'Prefetch: searching Slack channels with queries: {queries}')
 
     for q in queries:
         if channel_id:
             break
         try:
-            raw = call_plugin_mcp('slack', 'slack_search_channels', {'query': q, 'limit': 10})
-            cid, cname = parse_channel_result(raw)
+            raw = call_plugin_mcp('slack', 'slack_search_channels', {'query': q, 'limit': 50})
+            cid, cname = parse_channel_result(raw, match_case_number=case_number)
             if cid:
                 channel_id, channel_name = cid, cname
                 logging.info(f'Prefetch: found channel via query "{q}": {channel_id} #{channel_name}')
+            else:
+                logging.info(f'Prefetch: query "{q}" returned results but none matched case {case_number}')
         except Exception as e:
             logging.warning(f'Prefetch: channel search "{q}" failed: {e}')
             result['error'] = str(e)
 
-    # Fallback: search by case number in messages
+    # Fallback 1: try reading channel directly by constructed name
+    if not channel_id and slug:
+        constructed_name = f'sev1-{slug}-{case_number}'
+        try:
+            raw = call_plugin_mcp('slack', 'slack_read_channel',
+                                   {'channel_id': constructed_name, 'limit': 5}, timeout=15)
+            raw_str = str(raw)
+            # If it returns content (not an error), extract the channel ID from the response
+            if raw_str and 'error' not in raw_str.lower()[:50] and len(raw_str) > 50:
+                m = _re.search(r'C[A-Z0-9]{8,}', raw_str)
+                if m:
+                    channel_id = m.group(0)
+                else:
+                    channel_id = constructed_name  # use name as identifier
+                channel_name = constructed_name
+                logging.info(f'Prefetch: found channel by direct name lookup: {constructed_name}')
+        except Exception as e:
+            logging.warning(f'Prefetch: direct name lookup failed for {constructed_name}: {e}')
+
+    # Fallback 2: search by case number in messages
     if not channel_id:
         try:
             raw = call_plugin_mcp('slack', 'slack_search_public_and_private',
-                                   {'query': case_number, 'limit': 10})
-            m = _re.search(r'C[A-Z0-9]{8,}', str(raw))
-            if m:
-                channel_id = m.group(0)
+                                   {'query': f'sev1 {case_number}', 'limit': 10})
+            raw_str = str(raw)
+            # Look for channel IDs in message search results (Channel: #name format or archives/ID)
+            cid_match = _re.search(r'archives/([A-Z0-9]{8,})', raw_str)
+            if cid_match:
+                channel_id = cid_match.group(1)
                 channel_name = f'sev1-{slug}-{case_number}' if slug else f'sev1-{case_number}'
+                logging.info(f'Prefetch: found channel ID via message search: {channel_id}')
+            else:
+                m = _re.search(r'C[A-Z0-9]{8,}', raw_str)
+                if m:
+                    channel_id = m.group(0)
+                    channel_name = f'sev1-{slug}-{case_number}' if slug else f'sev1-{case_number}'
             logging.info(f'Prefetch: message search fallback — channel_id={channel_id}')
         except Exception as e:
             logging.warning(f'Prefetch: message search fallback failed: {e}')
