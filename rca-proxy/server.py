@@ -457,7 +457,7 @@ SECTIONS (keep each one SHORT):
    Sev-1 Mitigated (AX_Sev1_End_Time__c as tz-ts span — if null write "Open — not yet mitigated" in orange) |
    Success Plan (Case_Support_level__c) |
    Red Account (Open_Red_Account__c) |
-   Slack Channel (channel name as link) |
+   Slack Channel (channel name as clickable link ONLY — no source badges, no parenthetical notes about auth or source; if channel unknown write "Not found") |
    GUS Investigation (W-number as GUS link + " — Status: <status>" + GUS badge; if none write "None linked") |
    Case Owner (Owner.Name from A1 + Sev-1 assignee name if available from Slack, format "Primary / Sev-1 Name") |
    Case Status (Status from A1, color-coded per STATUS COLOR RULE above)

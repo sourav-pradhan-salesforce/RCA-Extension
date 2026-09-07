@@ -141,7 +141,28 @@ document.addEventListener('change', function(e) {
   if (!input.matches('input[name="srcMode"]')) return;
   const page = document.querySelector('.page');
   if (!page) return;
-  page.classList.toggle('no-source', input.classList.contains('btn-src-off'));
+  const noSource = input.classList.contains('btn-src-off');
+  page.classList.toggle('no-source', noSource);
+
+  if (noSource) {
+    // Replace source-links with plain text spans (save original for restore)
+    page.querySelectorAll('.source-link').forEach(a => {
+      const text = a.textContent.replace(/\s*↗\s*$/, '').trim();
+      if (!text) return; // pure-arrow links: just let CSS hide them
+      const span = document.createElement('span');
+      span.className = 'source-link-plain';
+      span.dataset.saved = a.outerHTML;
+      span.textContent = text;
+      a.replaceWith(span);
+    });
+  } else {
+    // Restore original links
+    page.querySelectorAll('.source-link-plain').forEach(span => {
+      const tpl = document.createElement('template');
+      tpl.innerHTML = span.dataset.saved;
+      span.replaceWith(tpl.content.firstChild);
+    });
+  }
 });
 
 // ── Load RCA from storage ──────────────────────────────────────
