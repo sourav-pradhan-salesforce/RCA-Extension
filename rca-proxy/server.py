@@ -594,7 +594,7 @@ def prefetch_slack_and_gus(case_number, account_name):
             except Exception as e2:
                 logging.warning(f'Prefetch: channel history fallback failed: {e2}')
 
-    # ── 3. Get W-numbers from OrgCS CaseBug__c junction (primary source) ───────
+    # ── 3. Get W-numbers from OrgCS — try multiple approaches ───────────────
     w_numbers_orgcs = []
     case_id = ''
     try:
@@ -602,13 +602,18 @@ def prefetch_slack_and_gus(case_number, account_name):
         id_match = _re.search(r'"Id"\s*:\s*"([0-9A-Za-z]{15,18})"', str(raw))
         if id_match:
             case_id = id_match.group(1)
-            raw2 = call_orgcs_soql(
-                f"SELECT ADM_Work__c, ADM_Work__r.Name FROM CaseBug__c WHERE Case__c='{case_id}' LIMIT 10"
-            )
-            w_numbers_orgcs = list(dict.fromkeys(_re.findall(r'W-\d{6,}', str(raw2))))
-            logging.info(f'Prefetch: W-numbers from CaseBug__c: {w_numbers_orgcs}')
+
+            # Case_Relationship__c is the correct junction object in OrgCS
+            try:
+                raw2 = call_orgcs_soql(
+                    f"SELECT GUS_Work__c, GUS_Work__r.Name FROM Case_Relationship__c WHERE Case__c='{case_id}' LIMIT 10"
+                )
+                w_numbers_orgcs = list(dict.fromkeys(_re.findall(r'W-\d{6,}', str(raw2))))
+                logging.info(f'Prefetch: W-numbers from Case_Relationship__c: {w_numbers_orgcs}')
+            except Exception as e:
+                logging.warning(f'Prefetch: Case_Relationship__c query failed: {e}')
     except Exception as e:
-        logging.warning(f'Prefetch: CaseBug__c query failed: {e}')
+        logging.warning(f'Prefetch: case ID lookup failed: {e}')
 
     # ── 4. Extract W-numbers from OrgCS comments ─────────────────────────────
     w_numbers_comments = []
