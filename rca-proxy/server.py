@@ -661,6 +661,203 @@ def prefetch_slack_and_gus(case_number, account_name):
     return result
 
 
+def _is_escalation_template(text):
+    t = text.upper()
+    return 'EXECUTIVE ESCALATION' in t or 'LIVING ONE-PAGER' in t
+
+
+def build_escalation_prompt(case_number, data_steps):
+    css = """<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Salesforce Sans',Arial,sans-serif;background:#fff;color:#181818;font-size:13px;}
+.page{max-width:860px;margin:0 auto;padding:32px 40px;}
+h1{font-size:16px;font-weight:800;color:#032D60;text-transform:uppercase;letter-spacing:1.5px;
+   margin-bottom:4px;border-bottom:3px solid #0176D3;padding-bottom:8px;}
+.esc-subtitle{font-size:10px;color:#706E6B;font-style:italic;margin-bottom:20px;margin-top:4px;}
+h2{background:#032D60;color:#fff;padding:8px 16px;font-size:11px;font-weight:700;
+   text-transform:uppercase;letter-spacing:1px;margin-top:20px;margin-bottom:0;}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+table th{background:#F3F3F3;font-weight:700;padding:8px 12px;border:1px solid #E0E0E0;text-align:left;}
+table td{padding:8px 12px;border:1px solid #E0E0E0;vertical-align:top;}
+.fv-field{width:35%;font-weight:600;background:#FAFAFA;color:#032D60;}
+.fv-value{background:#fff;}
+tr:nth-child(odd) td{background:#FAFAFA;}
+tr:nth-child(even) td{background:#fff;}
+.fv-field{background:#FAFAFA!important;}
+.fv-value{background:#fff!important;}
+.escalation-footer{margin-top:28px;padding-top:10px;border-top:1px solid #E0E0E0;
+   font-size:10px;color:#706E6B;font-style:italic;}
+a{color:#0176D3;text-decoration:none;}
+a:hover{text-decoration:underline;}
+.source-badge{display:inline-block;font-size:9px;font-weight:700;padding:1px 6px;
+   border-radius:3px;background:#E8F4FD;color:#032D60;margin-left:4px;vertical-align:middle;}
+.tz-ts{font-variant-numeric:tabular-nums;}
+</style>"""
+
+    prompt = f"""You are a Salesforce Senior Support Engineer writing an Executive Escalation Living One-Pager.
+IMPORTANT: Do NOT output the default RCA format. Output ONLY the escalation one-pager HTML described below.
+
+RULES:
+- NEVER write to a file. Output HTML to stdout ONLY.
+- Do NOT repeat a tool call that already returned data.
+- If a field has no data, write "Under Investigation" in that cell.
+- Output the full HTML immediately after collecting data.
+
+PHASE 1 — COLLECT DATA
+{data_steps}
+
+PHASE 2 — OUTPUT HTML
+
+Output a single self-contained HTML fragment (no <html>/<body> tags) that starts with the <style> block below,
+then the document content. Follow the exact structure shown.
+
+TIMEZONE RULE — ALL timestamps:
+  <span class="tz-ts" data-utc="<ISO-8601-UTC>">display text</span>
+
+STATUS / TEMPERATURE COLOR RULES:
+- STATUS "In Progress"  → <span style="color:#FE9339;font-weight:700;">🟡 In Progress</span>
+- STATUS "Resolved"     → <span style="color:#2E844A;font-weight:700;">🟢 Resolved</span>
+- STATUS "Closed"       → <span style="color:#2E844A;font-weight:700;">🟢 Closed</span>
+- TEMPERATURE "Hot"     → <span style="color:#BA0517;font-weight:700;">🔴 Hot</span>
+- TEMPERATURE "Warm"    → <span style="color:#FE9339;font-weight:700;">🟡 Warm</span>
+- TEMPERATURE "Cool"/"Cold" → <span style="color:#2E844A;font-weight:700;">🟢 Cool</span>
+
+DATA MAPPING — extract from collected data:
+- Customer              ← Account.Name
+- Case/Incident #       ← CaseNumber as <a href="https://orgcs.lightning.force.com/lightning/r/Case/<CaseId>/view" target="_blank" class="source-link">CaseNumber ↗</a>
+- Support Tier          ← Case_Support_level__c
+- Red Account           ← Open_Red_Account__c (Yes/No)
+- AOV Band              ← search OrgCS comments + Slack for dollar band (e.g. $1M-5M); write "Under Investigation" if not found
+- ACV at Risk           ← search OrgCS comments + Slack; write "Under Investigation" if not found
+- Renewal Date          ← search Org62 Account or Slack; write "Under Investigation" if not found
+- Escalation Reason     ← from case Type, Subject, or Slack context (e.g. "Technical / CX")
+- Escalation History    ← count prior Sev-1 cases from Slack or write "Under Investigation"
+- Escalation Owner/DRI  ← Owner.Name from A1 SOQL + email if visible
+- CIC Owner             ← search Slack for "Case Commander" or "CIC"; write "Under Investigation" if not found
+- Days Open             ← integer days from CreatedDate to today ({__import__('datetime').date.today().isoformat()})
+- STATUS                ← map case Status to In Progress / Resolved / Closed
+- TEMPERATURE           ← infer from Slack message tone and customer urgency (Hot/Warm/Cool)
+- UPDATE #              ← count from Slack or "1"
+- NEXT UPDATE           ← from Slack or "TBD"
+- UPDATE TYPE           ← "Awareness" or "Action Required" based on context
+- What's broken         ← Subject/Description — 1 precise sentence
+- What customer can't do ← 1 sentence business impact
+- Business consequence  ← user count + business risk
+- Root Cause Status     ← "Confirmed" or "Under Investigation"
+- Root Cause Summary    ← 2-3 precise sentences
+- Ruled out             ← from engineering notes in Slack/comments
+- Fix identified        ← from engineering actions
+- Deployment window     ← from Slack/engineering timeline
+- Swim lanes            ← Technical / Customer-Exec / Commercial tracks from Slack
+- Customer informed     ← Yes/No + date from Slack
+- Temperature evidence  ← 2-3 sentences from Slack tone and customer messages
+- Last contact          ← most recent OrgCS comment/email or Slack message date + author
+- Trust status          ← "Recoverable", "Degraded", or "Critical" based on tone
+- Customer's specific ask ← numbered list of customer asks from Slack/comments
+- Exec-to-exec call     ← from Slack/comments or "Not yet arranged"
+- SLA Status            ← "Within SLA" or "Breached" (only include row if non-default)
+- Renewal Risk          ← "Monitoring", "At Risk", "High Risk" (only include if non-default)
+- Legal Engaged         ← Yes/No (only include if Yes)
+- PR/Media Exposure     ← Yes/No (only include if Yes)
+- Next Steps            ← max 4 actions from engineering/Slack, each with named owner + specific date
+- Changelog             ← from OrgCS comments + Slack messages, newest first, format: <tz-ts> | what happened — Author Name
+
+EXACT HTML STRUCTURE TO OUTPUT:
+
+{css}
+<div class="page">
+<h1 data-default-tz="<IANA-tz-from-support_available_timezone__c-or-America/Los_Angeles>">EXECUTIVE ESCALATION — LIVING ONE-PAGER</h1>
+<p class="esc-subtitle">Always current. Update in place — do not reissue as a new document. Everything above the changelog reflects the state as of right now; the changelog is the only place history lives.</p>
+
+<h2>ACCOUNT — STATIC FACTS</h2>
+<p style="font-size:10px;color:#706E6B;padding:4px 0 8px 0;">Set once at Update 1. Does not change across the life of the escalation.</p>
+<table>
+  <tr><td class="fv-field">Customer</td><td class="fv-value">VALUE <span class="source-badge">OrgCS</span></td></tr>
+  <tr><td class="fv-field">Case / Incident #</td><td class="fv-value">LINK</td></tr>
+  <tr><td class="fv-field">Support Tier</td><td class="fv-value">VALUE <span class="source-badge">OrgCS</span></td></tr>
+  <tr><td class="fv-field">Red Account</td><td class="fv-value">VALUE <span class="source-badge">OrgCS</span></td></tr>
+  <tr><td class="fv-field">AOV Band</td><td class="fv-value">VALUE</td></tr>
+  <tr><td class="fv-field">ACV at Risk</td><td class="fv-value">VALUE</td></tr>
+  <tr><td class="fv-field">Renewal Date</td><td class="fv-value">VALUE</td></tr>
+  <tr><td class="fv-field">Escalation Reason</td><td class="fv-value">VALUE</td></tr>
+  <tr><td class="fv-field">Escalation History</td><td class="fv-value">VALUE</td></tr>
+  <tr><td class="fv-field">Escalation Owner / DRI</td><td class="fv-value">VALUE <span class="source-badge">OrgCS</span></td></tr>
+  <tr><td class="fv-field">CIC Owner</td><td class="fv-value">VALUE <span class="source-badge">Slack</span></td></tr>
+  <tr><td class="fv-field">Days Open</td><td class="fv-value">N days <span class="source-badge">OrgCS</span></td></tr>
+</table>
+
+<h2>CURRENT STATE</h2>
+<p style="font-size:10px;color:#706E6B;padding:4px 0 8px 0;">The only strip that must be re-checked every time this doc is touched.</p>
+<table>
+  <tr><td class="fv-field">STATUS</td><td class="fv-value">COLORED-STATUS-SPAN</td></tr>
+  <tr><td class="fv-field">TEMPERATURE</td><td class="fv-value">COLORED-TEMP-SPAN</td></tr>
+  <tr><td class="fv-field">UPDATE #</td><td class="fv-value">N - last touched <span class="tz-ts" data-utc="...">...</span></td></tr>
+  <tr><td class="fv-field">NEXT UPDATE</td><td class="fv-value">VALUE</td></tr>
+  <tr><td class="fv-field">UPDATE TYPE</td><td class="fv-value">VALUE</td></tr>
+</table>
+
+<h2>THE ISSUE IN 3 LINES</h2>
+<table>
+  <tr><td class="fv-field">What's broken</td><td class="fv-value">1 precise sentence</td></tr>
+  <tr><td class="fv-field">What the customer can't do</td><td class="fv-value">1 sentence</td></tr>
+  <tr><td class="fv-field">Business consequence</td><td class="fv-value">user count + risk</td></tr>
+</table>
+
+<h2>ROOT CAUSE</h2>
+<table>
+  <tr><td class="fv-field">Status</td><td class="fv-value">Confirmed or Under Investigation</td></tr>
+  <tr><td class="fv-field">Summary</td><td class="fv-value">2-3 sentence root cause</td></tr>
+  <tr><td class="fv-field">Ruled out</td><td class="fv-value">What was ruled out</td></tr>
+</table>
+
+<h2>PATH TO GREEN</h2>
+<table>
+  <tr><td class="fv-field">Fix identified</td><td class="fv-value">VALUE</td></tr>
+  <tr><td class="fv-field">Deployment window</td><td class="fv-value">VALUE</td></tr>
+  <tr><td class="fv-field">Swim lanes (parallel, not sequential)</td><td class="fv-value">Technical — [detail, ETA]<br>Customer/Exec — [detail, ETA]<br>Commercial — [detail, ETA]</td></tr>
+  <tr><td class="fv-field">Customer informed of path</td><td class="fv-value">Yes/No [date] — detail</td></tr>
+</table>
+
+<h2>CUSTOMER STATE</h2>
+<table>
+  <tr><td class="fv-field">Temperature evidence</td><td class="fv-value">2-3 sentences from Slack/comments tone</td></tr>
+  <tr><td class="fv-field">Last contact</td><td class="fv-value"><span class="tz-ts" data-utc="...">...</span> by Name</td></tr>
+  <tr><td class="fv-field">Trust status</td><td class="fv-value">Recoverable / Degraded / Critical</td></tr>
+  <tr><td class="fv-field">Customer's specific ask</td><td class="fv-value"><ol style="margin:0;padding-left:16px;"><li>Ask 1</li><li>Ask 2</li></ol></td></tr>
+  <tr><td class="fv-field">Exec-to-exec call</td><td class="fv-value">VALUE</td></tr>
+</table>
+
+<h2>COMMERCIAL &amp; RISK FLAGS</h2>
+<p style="font-size:10px;color:#706E6B;padding:4px 0 8px 0;">Show only fields that are non-default (not 'Within SLA' / 'No'). Omit this section entirely if everything is default.</p>
+<table>
+  <!-- Only include rows for non-default values. If all are default, output only the note paragraph above and no table. -->
+  <tr><td class="fv-field">SLA Status</td><td class="fv-value">VALUE — only if NOT "Within SLA"</td></tr>
+  <tr><td class="fv-field">Renewal Risk</td><td class="fv-value">VALUE — only if NOT "No"</td></tr>
+  <tr><td class="fv-field">Legal Engaged</td><td class="fv-value">Yes — only if Yes</td></tr>
+  <tr><td class="fv-field">PR / Media Exposure</td><td class="fv-value">Yes — only if Yes</td></tr>
+</table>
+
+<h2>NEXT STEPS</h2>
+<p style="font-size:10px;color:#706E6B;padding:4px 0 8px 0;">Max 4. Every action has a named role and a date — never TBD.</p>
+<table>
+  <tr><th style="width:55%">Action</th><th style="width:25%">Owner (Role)</th><th style="width:20%">Due</th></tr>
+  <tr><td>Action description</td><td>Name (Role)</td><td><span class="tz-ts" data-utc="...">...</span></td></tr>
+</table>
+
+<h2>CHANGELOG</h2>
+<p style="font-size:10px;color:#706E6B;padding:4px 0 8px 0;">Append only. Newest entry on top. This is the one place prior-update history is allowed to live.</p>
+<table>
+  <tr><th style="width:22%">Date / Time</th><th>What Changed (newest on top)</th></tr>
+  <!-- One row per Slack message or OrgCS comment, newest first -->
+  <tr><td><span class="tz-ts" data-utc="...">...</span></td><td>What happened — Author Name</td></tr>
+</table>
+
+<footer class="escalation-footer">Golden rules: business first, tech second · delta only in the changelog · name the owner, never TBD · paragraphs 3 lines max · unknown = state it explicitly · timestamp everything.</footer>
+</div>"""
+
+    return prompt
+
+
 def build_prompt(case_number, audience, template, template_text=None, prefetch=None):
     is_cic = (audience == 'cic')
 
@@ -818,6 +1015,10 @@ A3. OrgCS comments:
 {slack_section}
 
 {gus_section}"""
+
+    # Route to escalation template if uploaded PDF matches that format
+    if template_text and _is_escalation_template(template_text):
+        return build_escalation_prompt(case_number, data_steps)
 
     base_prompt = f"""You are a Salesforce Senior Support Engineer. Write a concise, precise Root Cause Analysis.
 STRICT LENGTH RULE: The entire RCA must be similar in length to a 1-2 page document. Short bullet points, no padding, no repetition.
