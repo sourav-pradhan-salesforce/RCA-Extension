@@ -758,13 +758,14 @@ A3. OrgCS comments:
    FROM Account WHERE Id='<AccountId>' LIMIT 1
    (Support_Level__c and Open_Red_Account__c are NOT on Org62 Account — skip them)"""
 
-    # Build Slack + GUS section from pre-fetched data if available
+    # Build Slack + GUS sections — decouple channel from GUS items
+    gus_pre = prefetch.get('gus_items', []) if prefetch else []
+
     if prefetch and prefetch.get('channel_id'):
         ch_id   = prefetch['channel_id']
         ch_name = prefetch['channel_name'] or f'sev1-channel-{case_number}'
         ch_url  = prefetch['channel_url']
         msgs    = prefetch.get('messages_summary', '')
-        gus_pre = prefetch.get('gus_items', [])
 
         slack_section = f"""C. Slack — PRE-FETCHED (do NOT call Slack MCP tools):
    Channel: #{ch_name} (ID: {ch_id})
@@ -774,28 +775,27 @@ A3. OrgCS comments:
 
    USE this data for: first alert time, error messages, actions taken, resolution time.
    Channel link for RCA: <a href="{ch_url}" target="_blank" class="source-link">#{ch_name} ↗</a>"""
-
-        if gus_pre:
-            gus_items_text = '\n'.join(
-                f'   {g["wnum"]}:\n{g["data"][:600]}' for g in gus_pre
-            )
-            gus_section = f"""D. GUS — PRE-FETCHED (do NOT call GUS MCP tools):
-{gus_items_text}
-
-   For each W-number above, build the GUS link:
-   <a href="https://gus.lightning.force.com/lightning/r/ADM_Work__c/<Id>/view" target="_blank" class="source-link">W-XXXXXXX ↗</a>
-   Include Subject, Status, Priority, Assignee, Scheduled_Build__c in the RCA.
-   Also scan OrgCS comments (A3) for additional W-numbers and query GUS for those too."""
-        else:
-            gus_section = f"""D. GUS — no items pre-fetched from Slack. Search OrgCS comments (A3) for W-\\d+ patterns.
-   {gus_note}"""
     else:
         slack_section = f"""C. Slack — scan OrgCS comments (A3) for Slack channel URLs or IDs first.
    If found, use that channel ID directly.
    Otherwise search messages: "{case_number}", "sev {case_number}"
    Try mcp__plugin_slack_slack__slack_search_public_and_private; on error skip Slack and write "Not found".
    Record EXACT channel ID and name."""
-        gus_section = f"""D. {gus_note[3:]}"""  # strip leading "D. " already in gus_note
+
+    if gus_pre:
+        gus_items_text = '\n'.join(
+            f'   {g["wnum"]}:\n{g["data"][:600]}' for g in gus_pre
+        )
+        gus_section = f"""D. GUS — PRE-FETCHED (do NOT call GUS MCP tools):
+{gus_items_text}
+
+   For each W-number above, build the GUS link:
+   <a href="https://gus.lightning.force.com/lightning/r/ADM_Work__c/<Id>/view" target="_blank" class="source-link">W-XXXXXXX ↗</a>
+   Include Subject, Status, Priority, Assignee, Scheduled_Build__c in the RCA.
+   Also scan OrgCS comments (A3) for additional W-numbers not already listed above."""
+    else:
+        gus_section = f"""D. GUS — no items pre-fetched. Search OrgCS comments (A3) for W-\\d+ patterns.
+   {gus_note}"""
 
     if is_cic:
         data_steps = f"""{orgcs_core}
