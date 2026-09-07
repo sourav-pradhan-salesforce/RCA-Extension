@@ -114,14 +114,23 @@ async function createGoogleDoc(btn) {
   const origText = btn.innerHTML;
   btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Creating…';
   try {
-    // Use page-load snapshot — never re-read storage (would pick up latest RCA, not this one)
-    const rcaPreviewHtml = _thisPageHtml;
-    const rcaPreviewCase = _thisPageCase;
-    if (!rcaPreviewHtml) throw new Error('No RCA content found on this page.');
+    // Read directly from the live DOM — guarantees we export what the page shows,
+    // regardless of how storage was overwritten by other tabs or when this tab loaded.
+    const pageEl = document.querySelector('.page');
+    if (!pageEl) throw new Error('No RCA content found on this page. Try refreshing.');
+
+    // Collect all <style> blocks injected into <head> by this RCA
+    const styles = Array.from(document.querySelectorAll('head style'))
+      .map(s => `<style>${s.textContent}</style>`).join('\n');
+
+    // Build self-contained HTML from live DOM
+    const rcaPreviewHtml = styles + '\n' + pageEl.outerHTML;
+    const rcaPreviewCase = _thisPageCase || document.title.replace(/^.*?(\d{6,}).*$/, '$1') || '';
+
     const res = await fetch('http://127.0.0.1:3001/create-gdoc', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ html: rcaPreviewHtml, case_number: rcaPreviewCase || '' }),
+      body: JSON.stringify({ html: rcaPreviewHtml, case_number: rcaPreviewCase }),
     });
     const text = await res.text();
     let data;
