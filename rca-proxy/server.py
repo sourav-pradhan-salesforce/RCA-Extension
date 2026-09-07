@@ -1408,17 +1408,64 @@ class RCAHandler(BaseHTTPRequestHandler):
             try:
                 import re as _re
 
-                # Preprocess HTML for Google Docs:
+                gdoc_html = html_content
+
+                def strip_div_block(html, pattern):
+                    """Strip a top-level div whose opening tag matches pattern, handling nested divs."""
+                    result = []
+                    i = 0
+                    while i < len(html):
+                        m = _re.search(pattern, html[i:], _re.IGNORECASE | _re.DOTALL)
+                        if not m:
+                            result.append(html[i:])
+                            break
+                        # Append everything before this div
+                        result.append(html[i:i + m.start()])
+                        # Walk forward counting open/close divs to find matching end
+                        pos = i + m.end()
+                        depth = 1
+                        while pos < len(html) and depth > 0:
+                            open_m  = _re.search(r'<div\b', html[pos:], _re.IGNORECASE)
+                            close_m = _re.search(r'</div\s*>', html[pos:], _re.IGNORECASE)
+                            if close_m and (not open_m or close_m.start() < open_m.start()):
+                                pos += close_m.end()
+                                depth -= 1
+                            elif open_m:
+                                pos += open_m.end()
+                                depth += 1
+                            else:
+                                break
+                        i = pos
+                    return ''.join(result)
+
+                # Strip toolbar (PDF/GDoc/Edit buttons + With Source/Without toggle)
+                gdoc_html = strip_div_block(gdoc_html, r'<div[^>]*class="[^"]*\btoolbar\b[^"]*"')
+                # Strip timezone sidebar (nested divs)
+                gdoc_html = strip_div_block(gdoc_html, r'<div[^>]*(?:id="tzSidebar"|class="[^"]*\btz-sidebar\b[^"]*")')
+                # Strip source badges
+                gdoc_html = _re.sub(r'<span[^>]*class="source-badge"[^>]*>.*?</span>', '', gdoc_html, flags=_re.DOTALL)
+
+                # Make h1 (document title) bold
+                gdoc_html = _re.sub(
+                    r'<h1([^>]*)>(.*?)</h1>',
+                    lambda m: f'<h1{m.group(1)}><strong>{m.group(2)}</strong></h1>',
+                    gdoc_html, flags=_re.DOTALL | _re.IGNORECASE
+                )
+                # Make h2 section headings bold
+                gdoc_html = _re.sub(
+                    r'<h2([^>]*)>(.*?)</h2>',
+                    lambda m: f'<h2{m.group(1)}><strong>{m.group(2)}</strong></h2>',
+                    gdoc_html, flags=_re.DOTALL | _re.IGNORECASE
+                )
+
                 # <th> has white text + dark bg via CSS — GDocs strips CSS leaving invisible text.
                 # Convert <th ...>content</th> → <td><strong>content</strong></td>
                 gdoc_html = _re.sub(
                     r'<th([^>]*)>(.*?)</th>',
                     lambda m: f'<td><strong>{m.group(2)}</strong></td>',
-                    html_content,
+                    gdoc_html,
                     flags=_re.DOTALL | _re.IGNORECASE
                 )
-                # Also strip source badges and links inside th content to keep it clean
-                gdoc_html = _re.sub(r'<span[^>]*class="source-badge"[^>]*>.*?</span>', '', gdoc_html, flags=_re.DOTALL)
 
                 # Single call: import HTML directly — preserves formatting
                 r1 = gdoc_mcp('import_to_google_doc', {
