@@ -834,7 +834,7 @@ SECTIONS (keep each one SHORT):
    Red Account (Open_Red_Account__c) |
    Slack Channel (channel name as clickable link ONLY — NEVER add any text after the link; if channel unknown write ONLY the two words "Not found" with nothing else) |
    GUS Investigation (W-number as GUS link + " — Status: <status>" + GUS badge; if none write "None linked") |
-   Case Owner (Owner.Name from A1 + Sev-1 assignee name if available from Slack, format "Primary / Sev-1 Name") |
+   Case Owner (ONLY use Owner.Name from the A1 SOQL result — this is the Salesforce support engineer assigned to the case. NEVER use contact names, customer names, or names found in comments/emails/Slack. If Sev-1 assignee is explicitly named in Slack as the on-call engineer, append as "Primary Owner / Sev-1: Name", otherwise show Owner.Name alone.) |
    Case Status (Status from A1, color-coded per STATUS COLOR RULE above)
    NOTE: All time cells use <span class="tz-ts" data-utc="..."> tags.
    NOTE: If OrgCS custom fields (A2) fail, still include the row with "Not available" — do NOT skip the row.
