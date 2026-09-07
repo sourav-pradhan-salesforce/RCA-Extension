@@ -199,7 +199,10 @@ chrome.storage.local.get(_storageKeys, (items) => {
     return;
   }
 
-  document.title = 'RCA — Case ' + (rcaPreviewCase || '');
+  // Set tab title from actual h1 so different template tabs are distinguishable
+  const _titleDoc = new DOMParser().parseFromString(rcaPreviewHtml, 'text/html');
+  const _h1Text = _titleDoc.querySelector('h1')?.textContent?.trim();
+  document.title = _h1Text || ('RCA — Case ' + (rcaPreviewCase || ''));
   document.getElementById('loading').style.display = 'none';
 
   const container = document.getElementById('content');
