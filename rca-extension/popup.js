@@ -256,8 +256,10 @@ function fetchRCA(caseNumber) {
 
 /* ── Open preview tab ── */
 function openPreviewTab(htmlContent, caseNumber) {
-  chrome.storage.local.set({ rcaPreviewHtml: htmlContent, rcaPreviewCase: caseNumber }, () => {
-    chrome.tabs.create({ url: chrome.runtime.getURL('preview.html') });
+  // Unique key per generation — prevents tabs from reading each other's content
+  const key = 'rcaPreview_' + Date.now();
+  chrome.storage.local.set({ [key]: { html: htmlContent, caseNumber } }, () => {
+    chrome.tabs.create({ url: chrome.runtime.getURL('preview.html') + '?key=' + key });
   });
 }
 

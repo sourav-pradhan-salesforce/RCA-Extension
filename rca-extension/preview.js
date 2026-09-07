@@ -172,7 +172,23 @@ document.addEventListener('change', function(e) {
 });
 
 // ── Load RCA from storage ──────────────────────────────────────
-chrome.storage.local.get(['rcaPreviewHtml', 'rcaPreviewCase'], ({ rcaPreviewHtml, rcaPreviewCase }) => {
+const _urlKey = new URLSearchParams(location.search).get('key');
+
+// Load from unique per-generation key if present, fall back to legacy shared key
+const _storageKeys = _urlKey ? [_urlKey] : ['rcaPreviewHtml', 'rcaPreviewCase'];
+
+chrome.storage.local.get(_storageKeys, (items) => {
+  let rcaPreviewHtml, rcaPreviewCase;
+  if (_urlKey && items[_urlKey]) {
+    rcaPreviewHtml = items[_urlKey].html;
+    rcaPreviewCase = items[_urlKey].caseNumber;
+    // Clean up storage after reading — no need to keep it around
+    chrome.storage.local.remove(_urlKey);
+  } else {
+    rcaPreviewHtml = items.rcaPreviewHtml;
+    rcaPreviewCase = items.rcaPreviewCase;
+  }
+
   // Snapshot at load — isolates this tab from future storage overwrites
   _thisPageHtml = rcaPreviewHtml || null;
   _thisPageCase = rcaPreviewCase || null;
