@@ -862,10 +862,10 @@ def build_prompt(case_number, audience, template, template_text=None, prefetch=N
     is_cic = (audience == 'cic')
 
     sections_rule = {
-        'leadership': 'Output sections 1,2,3,5,8 ONLY. Executive language, no stack traces.',
-        'customer':   'Output sections 1,2,3,7 ONLY. Plain language, no internal system names.',
-        'cic':        'Output all 8 sections.',
-    }.get(audience, 'Output all 8 sections.')
+        'leadership': 'Output sections 1,2,3,5,8 ONLY (plus section 9 if case not Closed). Executive language, no stack traces.',
+        'customer':   'Output sections 1,2,3,7 ONLY (plus section 9 if case not Closed). Plain language, no internal system names.',
+        'cic':        'Output all sections (1-8, plus section 9 if case not Closed).',
+    }.get(audience, 'Output all sections (1-8, plus section 9 if case not Closed).')
 
     gus_note = """D. GUS — MANDATORY. Search ALL four sources for W-numbers, then query GUS for each one found.
 
@@ -1099,6 +1099,15 @@ SECTIONS (keep each one SHORT):
 6. Support Opportunities — 2-3 bullets with bold lead phrase per bullet
 7. Customer Opportunities — 2-3 bullets with bold lead phrase per bullet
 8. Engineering Actions — bullet list: each action with "— Owner: Team" inline
+9. Current & Next Steps — INCLUDE THIS SECTION ONLY if Case Status (from A1) is NOT "Closed".
+   If status is "Working", "Open", "In Progress", "New", or any non-closed value, output:
+   <h2>9. Current &amp; Next Steps</h2>
+   TWO sub-sections:
+   - <strong>Currently In Progress:</strong> 2-4 bullets — what is actively being worked on RIGHT NOW
+     (pull from most recent Slack messages, latest OrgCS comments, engineering actions in progress)
+   - <strong>Next Steps:</strong> 2-4 bullets — what happens next, each with a named owner and estimated date/timeframe
+     (pull from Slack, OrgCS comments, GUS work item status)
+   Keep each bullet to 1 line. If case IS "Closed", skip section 9 entirely — do not output it.
 
 Start output with <h1 data-default-tz="<extracted-IANA-or-America/Los_Angeles>">Root Cause Analysis — Case #{case_number}</h1> immediately."""
 
