@@ -1030,6 +1030,7 @@ RULES:
 - Do NOT repeat a tool call that already returned data.
 - If a source has no data, write "Not available" inline and continue.
 - Output the full HTML immediately after collecting data — do not summarise first.
+- ENGINEER NAME RULE: The case owner's real name appears ONLY in the header table "Case Owner" row. Everywhere else in the document (executive summary, timeline, action items, engineering actions, next steps, any prose) always write "Support" instead of the engineer's name. Never write the engineer's name outside the header table.
 
 PHASE 1 — COLLECT DATA
 {data_steps}
@@ -1088,7 +1089,7 @@ SECTIONS (keep each one SHORT):
    Red Account (Open_Red_Account__c) |
    Slack Channel (channel name as clickable link ONLY — NEVER add any text after the link; if channel unknown write ONLY the two words "Not found" with nothing else) |
    GUS Investigation (W-number as GUS link + " — Status: <status>" + GUS badge; if none write "None linked") |
-   Case Owner (ONLY use Owner.Name from the A1 SOQL result — this is the Salesforce support engineer assigned to the case. NEVER use contact names, customer names, or names found in comments/emails/Slack. If Sev-1 assignee is explicitly named in Slack as the on-call engineer, append as "Primary Owner / Sev-1: Name", otherwise show Owner.Name alone.) |
+   Case Owner (ONLY use Owner.Name from the A1 SOQL result — show the actual engineer name HERE and ONLY HERE in this header row. Everywhere else in the entire document — summaries, timelines, action items, engineering actions, next steps — refer to this person as "Support" only, never by name.) |
    Case Status (Status from A1, color-coded per STATUS COLOR RULE above)
    NOTE: All time cells use <span class="tz-ts" data-utc="..."> tags.
    NOTE: If OrgCS custom fields (A2) fail, still include the row with "Not available" — do NOT skip the row.
