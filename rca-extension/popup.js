@@ -41,7 +41,8 @@ function updateMoonSun(isDark) {
   if (sun)  sun.style.display  = isDark ? 'none' : '';
   if (moon) moon.style.display = isDark ? '' : 'none';
 }
-updateMoonSun(document.documentElement.getAttribute('data-theme') === 'dark');
+const _initDark = document.documentElement.getAttribute('data-theme') === 'dark';
+updateMoonSun(_initDark);
 
 /* ── Template Management (Custom button) ── */
 let currentTemplateId = null;

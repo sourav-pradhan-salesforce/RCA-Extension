@@ -1,9 +1,52 @@
-/* ── Variables ── */
+/* ── Variables — LIGHT MODE DEFAULT ── */
 :root {
   --brand:        #0176D3;
   --brand-dark:   #014486;
   --brand-light:  #EBF5FF;
-  --brand-glow:   rgba(1,118,211,0.15);
+  --brand-glow:   rgba(1,118,211,0.12);
+  --bg:           #F0F4F8;
+  --surface:      #FFFFFF;
+  --surface2:     #F8FAFC;
+  --surface3:     #F1F5F9;
+  --border:       #E2E8F0;
+  --border-soft:  #EEF2F7;
+  --text:         #0F172A;
+  --text-2:       #334155;
+  --muted:        #64748B;
+  --muted-light:  #94A3B8;
+  --success:      #059669;
+  --success-bg:   rgba(5,150,105,0.08);
+  --success-bd:   rgba(5,150,105,0.2);
+  --warning:      #D97706;
+  --error:        #DC2626;
+  --error-bg:     rgba(220,38,38,0.06);
+  --error-bd:     rgba(220,38,38,0.2);
+  --radius:       14px;
+  --radius-sm:    10px;
+  --radius-xs:    7px;
+  --shadow:       0 1px 3px rgba(0,0,0,0.08);
+  --shadow-md:    0 8px 24px rgba(0,0,0,0.1);
+  --shadow-brand: 0 4px 16px rgba(1,118,211,0.25);
+  --dot-slack:    #0176D3;
+  --dot-orgcs:    #DC2626;
+  --dot-org62:    #D97706;
+  --dot-gus:      #059669;
+  --accent-purple:#7C3AED;
+  --accent-cyan:  #0891B2;
+  /* aurora in light mode: very subtle pastel */
+  --aurora-1: rgba(1,118,211,0.08);
+  --aurora-2: rgba(124,58,237,0.06);
+  --aurora-3: rgba(8,145,178,0.04);
+  --particle-opacity: 0.25;
+  --particle-color: 96,165,250;
+}
+
+/* ── DARK MODE ── */
+[data-theme="dark"] {
+  --brand:        #3B9EDB;
+  --brand-dark:   #76C2F3;
+  --brand-light:  rgba(59,158,219,0.12);
+  --brand-glow:   rgba(59,158,219,0.18);
   --bg:           #070b14;
   --surface:      rgba(255,255,255,0.04);
   --surface2:     rgba(255,255,255,0.07);
@@ -21,9 +64,6 @@
   --error:        #F87171;
   --error-bg:     rgba(248,113,113,0.08);
   --error-bd:     rgba(248,113,113,0.25);
-  --radius:       14px;
-  --radius-sm:    10px;
-  --radius-xs:    7px;
   --shadow:       0 1px 3px rgba(0,0,0,0.4);
   --shadow-md:    0 8px 32px rgba(0,0,0,0.5);
   --shadow-brand: 0 4px 20px rgba(1,118,211,0.4);
@@ -33,14 +73,11 @@
   --dot-gus:      #34D399;
   --accent-purple:#8B5CF6;
   --accent-cyan:  #06B6D4;
-}
-
-/* keep light variables identical so dark-toggle stays functional */
-[data-theme="dark"] {
-  --brand:       #3B9EDB;
-  --brand-dark:  #76C2F3;
-  --brand-light: rgba(59,158,219,0.12);
-  --brand-glow:  rgba(59,158,219,0.15);
+  --aurora-1: rgba(1,118,211,0.22);
+  --aurora-2: rgba(139,92,246,0.18);
+  --aurora-3: rgba(6,182,212,0.07);
+  --particle-opacity: 0.4;
+  --particle-color: 147,197,253;
 }
 
 /* ── Reset ── */
@@ -65,18 +102,17 @@ body {
   position: relative;
 }
 
-/* Aurora background */
+/* Aurora background — adapts to theme via CSS variables */
 body::before {
   content: '';
   position: fixed;
   inset: 0;
   z-index: -1;
   background:
-    radial-gradient(ellipse 80% 60% at 20% 0%,   rgba(1,118,211,0.22)    0%, transparent 60%),
-    radial-gradient(ellipse 60% 40% at 80% 100%,  rgba(139,92,246,0.18)   0%, transparent 60%),
-    radial-gradient(ellipse 50% 50% at 50% 50%,   rgba(6,182,212,0.07)    0%, transparent 70%),
-    radial-gradient(ellipse 40% 30% at 90% 10%,   rgba(16,185,129,0.08)   0%, transparent 50%),
-    #070b14;
+    radial-gradient(ellipse 80% 60% at 20% 0%,   var(--aurora-1) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 80% 100%,  var(--aurora-2) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 50% at 50% 50%,   var(--aurora-3) 0%, transparent 70%),
+    var(--bg);
   animation: auroraShift 10s ease-in-out infinite alternate;
 }
 
@@ -907,13 +943,15 @@ body::before {
 /* ── Toast ── */
 .toast {
   position: fixed;
-  bottom: 14px;
+  top: 14px;
   left: 14px;
   right: 14px;
+  bottom: auto;
   padding: 10px 14px;
-  background: rgba(15,20,35,0.95);
-  border: 1px solid rgba(255,255,255,0.1);
+  background: var(--surface);
+  border: 1px solid var(--border);
   color: var(--text);
+  box-shadow: var(--shadow-md);
   border-radius: var(--radius-sm);
   font-size: 12px;
   font-weight: 600;
