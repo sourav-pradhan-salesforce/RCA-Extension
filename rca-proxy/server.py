@@ -1065,10 +1065,10 @@ HEADING RULE — CRITICAL:
 - ALL section headings use <h2> tags. NEVER use <h1> for a section heading.
 - Section 5 heading must be <h2>5. Root Cause Analysis</h2> — same name, but h2 only.
 
-TIMEZONE EXTRACTION (for data-default-tz attribute only — no Time Format row needed):
+TIMEZONE EXTRACTION (for data-default-tz attribute only):
 - From support_available_timezone__c extract the IANA identifier (e.g. "America/Panama" from "(GMT-05:00) Eastern Standard Time (America/Panama)").
 - Use it ONLY for the data-default-tz attribute on <h1>. Fallback: "America/Los_Angeles".
-- Do NOT add a Time Format row to the header table.
+- NEVER add a "Time Format", "Display Timezone", "Timezone", or any timezone-related row to the header table. The UI handles timezone display — do NOT put it in the document.
 
 STATUS COLOR RULE:
 - If Case Status is "Working" or "Open" or "In Progress", wrap it in <span style="color:var(--warning);font-weight:700;">Working</span>
