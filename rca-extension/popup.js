@@ -82,16 +82,16 @@ async function checkProxyStatus() {
   const badge  = document.getElementById('proxyStatusBadge');
   const detail = document.getElementById('proxyDetail');
   badge.textContent = 'Checking…';
-  badge.className   = 'status-pill checking';
+  badge.className   = 'status-badge checking';
   detail.classList.add('hidden');
   try {
     const res = await fetch('http://127.0.0.1:3001/health', { signal: AbortSignal.timeout(3000) });
     const j   = await res.json();
-    if (j.status === 'ok') { badge.textContent = 'Online ✓'; badge.className = 'status-pill online'; }
+    if (j.status === 'ok') { badge.textContent = 'Online ✓'; badge.className = 'status-badge online'; }
     else throw new Error();
   } catch (_) {
     badge.textContent = 'Offline';
-    badge.className   = 'status-pill offline';
+    badge.className   = 'status-badge offline';
     detail.classList.remove('hidden');
   }
 }
@@ -442,6 +442,85 @@ function simulateSteps() {
     next();
   });
 }
+
+/* ── Particle canvas animation ── */
+(function() {
+  const canvas = document.getElementById('particleCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const COUNT = 55;
+  const CONNECT = 90;
+  let W, H, particles;
+
+  function resize() {
+    W = canvas.width  = canvas.offsetWidth  || 360;
+    H = canvas.height = canvas.offsetHeight || 500;
+  }
+
+  function mkParticle() {
+    return {
+      x:  Math.random() * W,
+      y:  Math.random() * H,
+      vx: (Math.random() - 0.5) * 0.4,
+      vy: (Math.random() - 0.5) * 0.4,
+      r:  Math.random() * 1.5 + 0.5,
+    };
+  }
+
+  function init() {
+    resize();
+    particles = Array.from({ length: COUNT }, mkParticle);
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    for (let i = 0; i < COUNT; i++) {
+      const p = particles[i];
+      p.x += p.vx; p.y += p.vy;
+      if (p.x < 0 || p.x > W) p.vx *= -1;
+      if (p.y < 0 || p.y > H) p.vy *= -1;
+
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(96,165,250,0.7)';
+      ctx.fill();
+
+      for (let j = i + 1; j < COUNT; j++) {
+        const q  = particles[j];
+        const dx = p.x - q.x, dy = p.y - q.y;
+        const d  = Math.sqrt(dx * dx + dy * dy);
+        if (d < CONNECT) {
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y);
+          ctx.lineTo(q.x, q.y);
+          ctx.strokeStyle = `rgba(96,165,250,${0.18 * (1 - d / CONNECT)})`;
+          ctx.lineWidth = 0.5;
+          ctx.stroke();
+        }
+      }
+    }
+    requestAnimationFrame(draw);
+  }
+
+  window.addEventListener('resize', init);
+  init();
+  draw();
+})();
+
+/* ── Ripple effect on all generate buttons ── */
+document.querySelectorAll('.btn-generate').forEach(btn => {
+  btn.addEventListener('click', function(e) {
+    const rect = btn.getBoundingClientRect();
+    const size = Math.max(rect.width, rect.height);
+    const x = e.clientX - rect.left - size / 2;
+    const y = e.clientY - rect.top  - size / 2;
+    const ripple = document.createElement('span');
+    ripple.className = 'btn-ripple';
+    ripple.style.cssText = `width:${size}px;height:${size}px;left:${x}px;top:${y}px`;
+    btn.appendChild(ripple);
+    setTimeout(() => ripple.remove(), 600);
+  });
+});
 
 /* ── Demo RCA ── */
 function getDemoRCA(caseNumber) {
