@@ -400,26 +400,26 @@ body {
 /* CTA group */
 .cta-group {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   gap: 8px;
 }
 
 .btn-generate {
   position: relative;
-  width: 100%;
-  padding: 11px 20px;
+  flex: 1;
+  padding: 11px 8px;
   border: none;
   border-radius: var(--radius);
   background: var(--brand);
   color: #fff;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   cursor: pointer;
   font-family: inherit;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
+  gap: 6px;
   transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
   box-shadow: var(--shadow-brand);
   overflow: hidden;
@@ -427,8 +427,8 @@ body {
 }
 
 .btn-generate:hover {
-  background: #015FB0;
-  box-shadow: 0 6px 20px rgba(1,118,211,0.4);
+  filter: brightness(1.12);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.25);
   transform: translateY(-1px);
 }
 
@@ -448,29 +448,14 @@ body {
 
 .btn-generate .btn-glow-ring { display: none; }
 
-.btn-demo {
-  width: 100%;
-  padding: 8px 20px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  font-family: inherit;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  transition: all 0.12s;
-}
+/* Internal — blue (default brand) */
+.btn-internal { background: var(--brand); }
 
-.btn-demo:hover {
-  background: var(--surface2);
-  color: var(--text-2);
-  border-color: var(--border);
-}
+/* External — green */
+.btn-external { background: linear-gradient(135deg, #2E844A 0%, #3BA755 100%); box-shadow: 0 2px 8px rgba(46,132,74,0.35); }
+
+/* Custom — purple */
+.btn-custom   { background: linear-gradient(135deg, #6B21A8 0%, #9333EA 100%); box-shadow: 0 2px 8px rgba(107,33,168,0.35); }
 
 /* ══════════ LOADING VIEW ══════════ */
 .loading-body {

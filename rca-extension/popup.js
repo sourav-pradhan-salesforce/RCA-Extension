@@ -43,74 +43,35 @@ function updateMoonSun(isDark) {
 }
 updateMoonSun(document.documentElement.getAttribute('data-theme') === 'dark');
 
-/* ── Template Management ── */
+/* ── Template Management (Custom button) ── */
 let currentTemplateId = null;
 
-function showTemplateState(state) {
-  document.getElementById('templateEmpty').classList.toggle('hidden', state !== 'empty');
-  document.getElementById('templateLoaded').classList.toggle('hidden', state !== 'loaded');
-  document.getElementById('templateUploading').classList.toggle('hidden', state !== 'uploading');
+chrome.storage.local.get(['rcaTemplateId'], ({ rcaTemplateId }) => {
+  if (rcaTemplateId) currentTemplateId = rcaTemplateId;
+});
+
+async function uploadTemplate(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const base64 = reader.result.split(',')[1];
+        const res = await fetch('http://127.0.0.1:3001/set-template', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ file_name: file.name, file_data: base64 }),
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        currentTemplateId = data.template_id;
+        chrome.storage.local.set({ rcaTemplateId: data.template_id, rcaTemplateName: file.name });
+        resolve(data);
+      } catch (err) { reject(err); }
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
-
-chrome.storage.local.get(['rcaTemplateId', 'rcaTemplateName'], ({ rcaTemplateId, rcaTemplateName }) => {
-  if (rcaTemplateId && rcaTemplateName) {
-    currentTemplateId = rcaTemplateId;
-    document.getElementById('templateName').textContent = rcaTemplateName;
-    showTemplateState('loaded');
-  } else {
-    showTemplateState('empty');
-  }
-});
-
-document.getElementById('templateUploadBtn').addEventListener('click', (e) => {
-  e.stopPropagation();
-  document.getElementById('templateFileInput').click();
-});
-
-document.getElementById('templateEmpty').addEventListener('click', () => {
-  document.getElementById('templateFileInput').click();
-});
-
-document.getElementById('templateFileInput').addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  e.target.value = '';
-
-  showTemplateState('uploading');
-  try {
-    const base64 = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload  = () => resolve(reader.result.split(',')[1]);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-
-    const res  = await fetch('http://127.0.0.1:3001/set-template', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ file_name: file.name, file_data: base64 }),
-    });
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
-
-    currentTemplateId = data.template_id;
-    chrome.storage.local.set({ rcaTemplateId: data.template_id, rcaTemplateName: file.name });
-    document.getElementById('templateName').textContent = file.name;
-    showTemplateState('loaded');
-    showToast('Template loaded: ' + file.name, 'success');
-  } catch (err) {
-    showTemplateState('empty');
-    showToast('Upload failed: ' + err.message, 'error');
-  }
-});
-
-document.getElementById('templateRemoveBtn').addEventListener('click', (e) => {
-  e.stopPropagation();
-  currentTemplateId = null;
-  chrome.storage.local.remove(['rcaTemplateId', 'rcaTemplateName']);
-  showTemplateState('empty');
-  showToast('Template removed');
-});
 
 /* ── Settings ── */
 document.getElementById('settingsBtn').addEventListener('click', () => { checkProxyStatus(); showView('settings'); });
@@ -135,34 +96,50 @@ async function checkProxyStatus() {
   }
 }
 
-/* ── Demo Button ── */
-document.getElementById('demoBtn').addEventListener('click', async () => {
-  const caseNumber = document.getElementById('caseNumber').value.trim() || 'DEMO-001';
-  showView('loading');
-  resetSteps();
-  resetConsole();
-  hideLoadingError();
-  startTimer();
-  await simulateSteps();
-  stopTimer();
-  openPreviewTab(buildPreviewPage(getDemoRCA(caseNumber), true), caseNumber);
-  showView('main');
-});
-
-/* ── Generate RCA ── */
+/* ── Button handlers ── */
 document.getElementById('errorBackBtn').addEventListener('click', () => { stopTimer(); showView('main'); });
 
-document.getElementById('generateBtn').addEventListener('click', async () => {
+document.getElementById('internalBtn').addEventListener('click', async () => {
   const caseNumber = document.getElementById('caseNumber').value.trim();
   if (!caseNumber) { showToast('Enter a case number', 'error'); return; }
+  currentTemplateId = null;
+  chrome.storage.local.remove(['rcaTemplateId', 'rcaTemplateName']);
+  await startGeneration(caseNumber);
+});
 
+document.getElementById('externalBtn').addEventListener('click', () => {
+  showToast('External RCA — coming soon', 'info');
+});
+
+document.getElementById('customBtn').addEventListener('click', () => {
+  const caseNumber = document.getElementById('caseNumber').value.trim();
+  if (!caseNumber) { showToast('Enter a case number', 'error'); return; }
+  document.getElementById('templateFileInput').click();
+});
+
+document.getElementById('templateFileInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  e.target.value = '';
+  const caseNumber = document.getElementById('caseNumber').value.trim();
+  if (!caseNumber) { showToast('Enter a case number', 'error'); return; }
+  showToast('Processing template…');
+  try {
+    await uploadTemplate(file);
+    showToast('Template loaded: ' + file.name + ' — generating…', 'success');
+    await startGeneration(caseNumber);
+  } catch (err) {
+    showToast('Template upload failed: ' + err.message, 'error');
+  }
+});
+
+async function startGeneration(caseNumber) {
   showView('loading');
   resetSteps();
   resetConsole();
   hideLoadingError();
   startTimer();
   startAutoSteps();
-
   try {
     const html = await fetchRCA(caseNumber);
     stopTimer();
@@ -175,7 +152,7 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
     stopAutoSteps();
     showLoadingError(err.message || 'Generation failed');
   }
-});
+}
 
 /* ── Timer ── */
 let timerInterval = null;
