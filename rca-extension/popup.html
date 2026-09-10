@@ -49,24 +49,24 @@
     <main id="mainView" class="view active">
       <div class="form-body">
 
-        <!-- Case Number -->
-        <div class="case-section">
-          <div class="field-label">Case Number</div>
+        <!-- Case Number Card -->
+        <div class="card">
+          <div class="field-label">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            Case Number
+          </div>
           <div class="input-row">
-            <span class="input-icon">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-              </svg>
-            </span>
             <input type="text" id="caseNumber" class="case-input"
-                   placeholder="e.g. 00473996707" autocomplete="off" spellcheck="false"/>
+                   placeholder="e.g. 473996707" autocomplete="off" spellcheck="false"/>
           </div>
         </div>
 
-
-        <!-- Sources -->
-        <div class="sources-row">
-          <span class="sources-label">Sources</span>
+        <!-- Sources Card -->
+        <div class="card card-sources">
+          <div class="field-label">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            Data Sources
+          </div>
           <div class="source-pills">
             <span class="pill"><span class="pill-dot slack"></span>Slack</span>
             <span class="pill"><span class="pill-dot orgcs"></span>OrgCS</span>
@@ -75,7 +75,6 @@
           </div>
         </div>
 
-        <!-- Template -->
         <!-- CTAs -->
         <input type="file" id="templateFileInput" accept=".pdf,.txt" style="display:none"/>
         <div class="cta-group">

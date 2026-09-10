@@ -75,8 +75,16 @@ async function uploadTemplate(file) {
 }
 
 /* ── Settings ── */
-document.getElementById('settingsBtn').addEventListener('click', () => { checkProxyStatus(); showView('settings'); });
-document.getElementById('settingsBackBtn').addEventListener('click', () => showView('main'));
+let _prevView = 'main'; // track where to return after settings
+
+document.getElementById('settingsBtn').addEventListener('click', () => {
+  // remember current view so back button returns to it
+  const current = Object.keys(views).find(k => views[k] && views[k].classList.contains('active'));
+  _prevView = current || 'main';
+  checkProxyStatus();
+  showView('settings');
+});
+document.getElementById('settingsBackBtn').addEventListener('click', () => showView(_prevView));
 document.getElementById('checkProxyBtn').addEventListener('click', checkProxyStatus);
 
 async function checkProxyStatus() {
@@ -134,7 +142,11 @@ document.getElementById('templateFileInput').addEventListener('change', async (e
   }
 });
 
+let _isGenerating = false;
+
 async function startGeneration(caseNumber) {
+  _isGenerating = true;
+  chrome.storage.local.set({ rcaInProgress: { caseNumber, templateId: currentTemplateId || null, startedAt: Date.now() } });
   showView('loading');
   resetSteps();
   resetConsole();
@@ -143,17 +155,33 @@ async function startGeneration(caseNumber) {
   startAutoSteps();
   try {
     const html = await fetchRCA(caseNumber);
+    _isGenerating = false;
+    chrome.storage.local.remove('rcaInProgress');
     stopTimer();
     stopAutoSteps();
     ['slack','orgcs','org62','gus','public','generate'].forEach(s => setStep(s, 'done'));
     openPreviewTab(buildPreviewPage(html, false), caseNumber);
     showView('main');
   } catch (err) {
+    _isGenerating = false;
+    chrome.storage.local.remove('rcaInProgress');
     stopTimer();
     stopAutoSteps();
     showLoadingError(err.message || 'Generation failed');
   }
 }
+
+// On popup open: restore case number if a generation was recently in progress
+// (does NOT auto-start — user decides whether to re-run)
+chrome.storage.local.get(['rcaInProgress'], ({ rcaInProgress }) => {
+  if (!rcaInProgress) return;
+  chrome.storage.local.remove('rcaInProgress'); // always clear stale state on open
+  const age = Date.now() - (rcaInProgress.startedAt || 0);
+  if (age > 900000) return; // ignore if older than 15 min
+  const caseInput = document.getElementById('caseNumber');
+  if (caseInput && rcaInProgress.caseNumber) caseInput.value = rcaInProgress.caseNumber;
+  currentTemplateId = rcaInProgress.templateId || null;
+});
 
 /* ── Timer ── */
 let timerInterval = null;
