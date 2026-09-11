@@ -337,8 +337,8 @@ body::before {
 
 .card-sources { gap: 9px; }
 
-/* Light mode: white card with blue gradient border */
-:root .card {
+/* Light mode only: white card with blue gradient border */
+:root:not([data-theme="dark"]) .card {
   background:
     linear-gradient(#FFFFFF, #FFFFFF) padding-box,
     linear-gradient(135deg,
@@ -705,6 +705,30 @@ body::before {
 }
 .btn-back:hover { background: var(--error-bg); }
 
+/* Cancel button */
+.btn-cancel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 18px;
+  border: 1.5px solid var(--error-bd);
+  border-radius: var(--radius-sm);
+  background: var(--error-bg);
+  color: var(--error);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s;
+  letter-spacing: 0.3px;
+}
+.btn-cancel:hover {
+  background: var(--error);
+  color: #fff;
+  box-shadow: 0 0 16px var(--error-bd);
+  transform: scale(1.03);
+}
+
 /* ── Console ── */
 .console-wrap { width: 100%; }
 
@@ -766,7 +790,7 @@ body::before {
   backdrop-filter: blur(20px);
 }
 
-:root .steps-timeline {
+:root:not([data-theme="dark"]) .steps-timeline {
   background:
     linear-gradient(#FFFFFF, #FFFFFF) padding-box,
     linear-gradient(180deg,
@@ -824,11 +848,11 @@ body::before {
 }
 
 .step-circle {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
-  border: 1.5px solid var(--border);
-  background: var(--surface2);
+  border: 2px solid var(--muted-light);
+  background: var(--surface3);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -839,20 +863,20 @@ body::before {
 
 .step.active .step-circle {
   border-color: var(--brand);
-  background: var(--brand-light);
-  box-shadow: 0 0 0 3px var(--brand-glow), 0 0 12px var(--brand-glow);
+  background: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-glow), 0 0 14px var(--brand-glow);
 }
 
 .step.done .step-circle {
-  border-color: var(--dot-gus);
-  background: var(--success-bg);
-  box-shadow: 0 0 10px rgba(52,211,153,0.45);
+  border-color: var(--success);
+  background: var(--success);
+  box-shadow: 0 0 10px var(--success-bd);
 }
 
 .step-num {
   font-size: 9px;
-  font-weight: 700;
-  color: var(--muted);
+  font-weight: 800;
+  color: var(--text-2);
   transition: opacity 0.2s;
 }
 
@@ -870,7 +894,7 @@ body::before {
 }
 
 .step.active .step-check,
-.step.done  .step-check { opacity: 1; }
+.step.done  .step-check { opacity: 1; stroke: #fff; }
 
 .step-label {
   font-size: 12px;
@@ -945,7 +969,7 @@ body::before {
   gap: 10px;
 }
 
-:root .info-card {
+:root:not([data-theme="dark"]) .info-card {
   background:
     linear-gradient(#FFFFFF, #FFFFFF) padding-box,
     linear-gradient(135deg,

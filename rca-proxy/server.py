@@ -727,9 +727,9 @@ DATA MAPPING — extract from collected data:
 - Case/Incident #       ← CaseNumber as <a href="https://orgcs.lightning.force.com/lightning/r/Case/<CaseId>/view" target="_blank" class="source-link">CaseNumber ↗</a>
 - Support Tier          ← Case_Support_level__c
 - Red Account           ← Open_Red_Account__c (Yes/No)
-- AOV Band              ← search OrgCS comments + Slack for dollar band (e.g. $1M-5M); write "Under Investigation" if not found
-- ACV at Risk           ← search OrgCS comments + Slack; write "Under Investigation" if not found
-- Renewal Date          ← search Org62 Account or Slack; write "Under Investigation" if not found
+- AOV Band              ← use AOV_Band__c from Org62 Account (B1); fallback to OrgCS comments/Slack; "Not available" if not found
+- ACV at Risk           ← use sfbase__ACV__c (or Forecasted_Annual_Contract_Value__c) from Org62 renewal Opportunity (B2); "Not available" if not found
+- Renewal Date          ← use CloseDate from most recent open renewal Opportunity (B2); "Not available" if not found
 - Escalation Reason     ← from case Type, Subject, or Slack context (e.g. "Technical / CX")
 - Escalation History    ← count prior Sev-1 cases from Slack or write "Under Investigation"
 - Escalation Owner/DRI  ← Owner.Name from A1 SOQL + email if visible
@@ -954,11 +954,22 @@ A3. OrgCS comments:
    SELECT Id,CommentBody,CreatedDate,CreatedBy.Name,IsPublished
    FROM CaseComment WHERE ParentId='<CaseId>' ORDER BY CreatedDate ASC LIMIT 20"""
 
-    # Org62 — only standard Account fields that actually exist
-    org62_query = """B. Org62 — use Account.Id from above:
-   SELECT Id,Name,Industry,Type,BillingCountry
+    # Org62 — Account + renewal Opportunity for AOV Band, ACV, Renewal Date
+    org62_query = """B. Org62 — use Account.Id from OrgCS (A1):
+   B1. Account:
+   SELECT Id,Name,Industry,Type,BillingCountry,AOV_Band__c
    FROM Account WHERE Id='<AccountId>' LIMIT 1
-   (Support_Level__c and Open_Red_Account__c are NOT on Org62 Account — skip them)"""
+   → AOV_Band__c is the AOV Band value; use it directly.
+
+   B2. Renewal Opportunity (for ACV at Risk + Renewal Date):
+   SELECT Id,Name,StageName,CloseDate,sfbase__ACV__c,
+          Forecasted_Annual_Contract_Value__c,License_Renewal_Status__c
+   FROM Opportunity
+   WHERE AccountId='<AccountId>' AND Type='Renewal'
+   ORDER BY CloseDate DESC LIMIT 3
+   → Use sfbase__ACV__c as ACV at Risk; CloseDate of the most relevant open renewal as Renewal Date.
+   → If sfbase__ACV__c is null use Forecasted_Annual_Contract_Value__c.
+   → If no open renewal found write "Not available"."""
 
     # Build Slack + GUS sections — decouple channel from GUS items
     gus_pre = prefetch.get('gus_items', []) if prefetch else []

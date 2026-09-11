@@ -143,6 +143,16 @@ document.getElementById('templateFileInput').addEventListener('change', async (e
 });
 
 let _isGenerating = false;
+let _activeES = null; // current EventSource — used by cancel
+
+document.getElementById('cancelBtn').addEventListener('click', () => {
+  if (_activeES) { _activeES.close(); _activeES = null; }
+  _isGenerating = false;
+  chrome.storage.local.remove('rcaInProgress');
+  stopTimer();
+  stopAutoSteps();
+  showView('main');
+});
 
 async function startGeneration(caseNumber) {
   _isGenerating = true;
@@ -155,6 +165,7 @@ async function startGeneration(caseNumber) {
   startAutoSteps();
   try {
     const html = await fetchRCA(caseNumber);
+    _activeES = null;
     _isGenerating = false;
     chrome.storage.local.remove('rcaInProgress');
     stopTimer();
@@ -163,11 +174,12 @@ async function startGeneration(caseNumber) {
     openPreviewTab(buildPreviewPage(html, false), caseNumber);
     showView('main');
   } catch (err) {
+    _activeES = null;
     _isGenerating = false;
     chrome.storage.local.remove('rcaInProgress');
     stopTimer();
     stopAutoSteps();
-    showLoadingError(err.message || 'Generation failed');
+    if (err.message !== 'cancelled') showLoadingError(err.message || 'Generation failed');
   }
 }
 
@@ -245,6 +257,7 @@ function fetchRCA(caseNumber) {
     const done  = (fn, v) => { if (!settled) { settled = true; fn(v); } };
     const timeout = setTimeout(() => done(reject, new Error('Timed out after 15 minutes.')), 900000);
     const es = new EventSource(url);
+    _activeES = es;
 
     es.onerror = () => {
       if (!settled) {
@@ -362,7 +375,7 @@ function previewStyles() {
   return '<style>' + [
     ':root{--brand:#0176D3;--brand-dark:#014486;--brand-light:#D8EDFF;--success:#2E844A;--warning:#DD7A01;--border:#DDDBDA;--n2:#F3F3F3;--n5:#706E6B;--n6:#3E3E3C;--n7:#181818;}',
     '*{box-sizing:border-box;margin:0;padding:0;}',
-    'body{font-family:-apple-system,"Salesforce Sans",Arial,sans-serif;font-size:13px;color:var(--n7);background:var(--n2);display:flex;flex-direction:row;}',
+    'body{font-family:-apple-system,"Salesforce Sans",Arial,sans-serif;font-size:13px;color:var(--n7);background:#fff;display:flex;flex-direction:row;}',
     '.tz-sidebar{width:0;overflow:hidden;flex-shrink:0;background:#fff;border-right:1px solid var(--border);transition:width 0.25s cubic-bezier(0.4,0,0.2,1);position:sticky;top:0;height:100vh;display:flex;flex-direction:column;}',
     '.tz-sidebar.open{width:160px;}',
     '.tz-sidebar-inner{width:160px;padding:14px 12px;display:flex;flex-direction:column;gap:6px;overflow:hidden;}',
@@ -407,7 +420,7 @@ function previewStyles() {
     'p{margin-bottom:9px;line-height:1.65;}ul{padding-left:20px;margin-bottom:9px;}li{margin-bottom:4px;line-height:1.55;}',
     'table{width:100%;border-collapse:collapse;margin:12px 0;font-size:12px;border-radius:6px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.06);}',
     'th{background:linear-gradient(135deg,var(--brand-dark),var(--brand));color:#fff;font-weight:600;padding:8px 12px;text-align:left;}',
-    'td{padding:7px 12px;border-bottom:1px solid var(--border);}tr:nth-child(even) td{background:var(--n2);}',
+    'td{padding:7px 12px;border-bottom:1px solid var(--border);}tr:nth-child(even) td{background:#F8FAFF;}',
     '.source-badge{display:inline-flex;align-items:center;font-size:10px;background:var(--n2);color:var(--n5);border:1px solid var(--border);border-radius:20px;padding:1px 7px;margin-left:4px;vertical-align:middle;font-weight:600;}',
     '.source-link{display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:600;color:var(--brand);text-decoration:none;background:var(--brand-light);border:1px solid #9DC8F0;border-radius:4px;padding:1px 7px;margin-left:4px;vertical-align:middle;}',
     '.source-link:hover{background:#BFD9F5;text-decoration:underline;}',
