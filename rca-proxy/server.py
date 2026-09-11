@@ -710,6 +710,7 @@ PHASE 2 — OUTPUT HTML
 
 Output a single self-contained HTML fragment (no <html>/<body> tags) that starts with the <style> block below,
 then the document content. Follow the exact structure shown.
+DO NOT wrap the output in markdown code fences (no ```html or ``` blocks). Output raw HTML only.
 
 TIMEZONE RULE — ALL timestamps:
   <span class="tz-ts" data-utc="<ISO-8601-UTC>">display text</span>
@@ -1050,6 +1051,32 @@ PHASE 2 — OUTPUT HTML
 
 {sections_rule}
 
+OUTPUT FORMAT: Raw HTML only — no markdown, no backticks, no explanations outside the HTML.
+Start your output with this EXACT <style> block, then the document body:
+
+<style>
+*{{box-sizing:border-box;margin:0;padding:0;}}
+body{{font-family:-apple-system,'Salesforce Sans',Arial,sans-serif;font-size:13px;color:#181818;background:#F3F3F3;}}
+.page{{max-width:860px;margin:0 auto;padding:24px 32px;background:#fff;min-height:100vh;}}
+h1{{font-size:20px;font-weight:800;color:#032D60;padding-bottom:10px;border-bottom:3px solid #0176D3;margin-bottom:18px;}}
+h2{{font-size:13px;font-weight:700;color:#0176D3;margin:22px 0 8px;padding:7px 12px;background:#EEF4FF;border-left:3px solid #0176D3;border-radius:0 6px 6px 0;}}
+h3{{font-size:13px;font-weight:700;color:#3E3E3C;margin:14px 0 5px;}}
+p{{margin-bottom:9px;line-height:1.65;color:#181818;}}
+ul{{padding-left:20px;margin-bottom:9px;}}
+li{{margin-bottom:4px;line-height:1.55;color:#181818;}}
+strong{{color:#032D60;}}
+table{{width:100%;border-collapse:collapse;margin:12px 0;font-size:12px;border-radius:6px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.06);}}
+th{{background:linear-gradient(135deg,#032D60,#0176D3);color:#fff;font-weight:600;padding:8px 12px;text-align:left;}}
+td{{padding:7px 12px;border-bottom:1px solid #DDDBDA;color:#181818;}}
+tr:nth-child(even) td{{background:#F8F9FF;}}
+.source-badge{{display:inline-flex;align-items:center;font-size:10px;background:#F3F3F3;color:#706E6B;border:1px solid #DDDBDA;border-radius:20px;padding:1px 7px;margin-left:4px;vertical-align:middle;font-weight:600;}}
+.source-link{{display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:600;color:#0176D3;text-decoration:none;background:#EEF4FF;border:1px solid #9DC8F0;border-radius:4px;padding:1px 7px;margin-left:4px;vertical-align:middle;}}
+.source-link:hover{{background:#BFD9F5;text-decoration:underline;}}
+code{{background:#F3F3F3;padding:2px 6px;border-radius:4px;font-size:11px;font-family:monospace;color:#C41E3A;}}
+.tz-ts{{font-weight:600;color:#181818;}}
+.toolbar,.tz-sidebar{{display:none;}}
+</style>
+
 TIMEZONE RULE — ALL timestamps must use this format:
   <span class="tz-ts" data-utc="<ISO-8601-UTC>"><UTC display></span>
   Example: <span class="tz-ts" data-utc="2026-07-07T14:22:00Z">2026-07-07 14:22 UTC</span>
@@ -1151,9 +1178,9 @@ TEMPLATE CONTENT (fill this exactly):
 
 
 def extract_html(text):
+    import re as _re2
     # If Claude wrote a file path, try reading that file
-    import re
-    file_match = re.search(r'written to [`\'"]?(/[^\s`\'"]+\.html)', text)
+    file_match = _re2.search(r'written to [`\'"]?(/[^\s`\'"]+\.html)', text)
     if file_match:
         fpath = file_match.group(1)
         try:
@@ -1166,6 +1193,12 @@ def extract_html(text):
                     return content[idx:].strip()
         except Exception as e:
             logging.warning(f'Could not read Claude-written file {fpath}: {e}')
+
+    # Strip markdown code fences (```html ... ``` or ``` ... ```)
+    # Extract content inside the first code fence if present
+    fence_match = _re2.search(r'```(?:html)?\s*\n([\s\S]*?)```', text)
+    if fence_match:
+        text = fence_match.group(1).strip()
 
     for tag in ['<h1', '<h2', '<table']:
         idx = text.find(tag)
