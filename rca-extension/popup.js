@@ -14,6 +14,9 @@ const views = {
 function showView(name) {
   Object.values(views).forEach(v => { if (v) v.classList.remove('active'); });
   if (views[name]) views[name].classList.add('active');
+  // Scroll to top whenever the view changes
+  const scroll = document.getElementById('viewsScroll');
+  if (scroll) scroll.scrollTop = 0;
 }
 
 /* ── Toast ── */
@@ -23,7 +26,7 @@ function showToast(msg, type) {
   clearTimeout(toastTimer);
   toastEl.textContent = msg;
   toastEl.className = 'toast show' + (type ? ' ' + type : '');
-  toastTimer = setTimeout(() => toastEl.classList.remove('show'), 3500);
+  toastTimer = setTimeout(() => toastEl.classList.remove('show'), 3000);
 }
 
 /* ── Dark Mode Toggle ── */
@@ -105,25 +108,38 @@ async function checkProxyStatus() {
   }
 }
 
-/* ── Button handlers ── */
+/* ── Analysis type tab selection ── */
+let selectedType = 'internal';
+
+document.getElementById('analysisTabs').addEventListener('click', e => {
+  const tab = e.target.closest('.atab');
+  if (!tab) return;
+  document.querySelectorAll('.atab').forEach(t => t.classList.remove('active'));
+  tab.classList.add('active');
+  selectedType = tab.dataset.type;
+});
+
+/* ── Analyze button ── */
 document.getElementById('errorBackBtn').addEventListener('click', () => { stopTimer(); showView('main'); });
 
-document.getElementById('internalBtn').addEventListener('click', async () => {
+document.getElementById('analyzeBtn').addEventListener('click', async () => {
   const caseNumber = document.getElementById('caseNumber').value.trim();
   if (!caseNumber) { showToast('Enter a case number', 'error'); return; }
+
+  if (selectedType === 'external') {
+    showToast('External RCA — coming soon', 'info');
+    return;
+  }
+
+  if (selectedType === 'custom') {
+    document.getElementById('templateFileInput').click();
+    return;
+  }
+
+  // internal
   currentTemplateId = null;
   chrome.storage.local.remove(['rcaTemplateId', 'rcaTemplateName']);
   await startGeneration(caseNumber);
-});
-
-document.getElementById('externalBtn').addEventListener('click', () => {
-  showToast('External RCA — coming soon', 'info');
-});
-
-document.getElementById('customBtn').addEventListener('click', () => {
-  const caseNumber = document.getElementById('caseNumber').value.trim();
-  if (!caseNumber) { showToast('Enter a case number', 'error'); return; }
-  document.getElementById('templateFileInput').click();
 });
 
 document.getElementById('templateFileInput').addEventListener('change', async (e) => {
@@ -171,6 +187,7 @@ async function startGeneration(caseNumber) {
     stopTimer();
     stopAutoSteps();
     ['slack','orgcs','org62','gus','public','generate'].forEach(s => setStep(s, 'done'));
+    saveToHistory(caseNumber, html);
     openPreviewTab(buildPreviewPage(html, false), caseNumber);
     showView('main');
   } catch (err) {
@@ -240,6 +257,7 @@ function startAutoSteps() {
       else                    setStep(s.step, '');
     });
     setStatus(STEPS[current].msg);
+    updateOrbitalIcon(STEPS[current].step);
   }, 500);
 }
 
@@ -314,6 +332,7 @@ function resetSteps() {
     const el = document.getElementById('step-' + id);
     if (el) el.classList.remove('active','done');
   });
+  updateOrbitalIcon('slack');
 }
 function setStep(id, state) {
   const el = document.getElementById('step-' + id);
@@ -324,6 +343,25 @@ function setStep(id, state) {
 function setStatus(msg) {
   const el = document.getElementById('loadingStatus');
   if (el) el.textContent = msg;
+}
+
+const ORB_STEP_ICON = {
+  slack:    'orbIconSlack',
+  orgcs:    'orbIconSf',
+  org62:    'orbIconOrg62',
+  gus:      'orbIconSf',
+  public:   'orbIconSf',
+  generate: 'orbIconRca',
+};
+
+function updateOrbitalIcon(step) {
+  const iconId = ORB_STEP_ICON[step] || 'orbIconRca';
+  ['orbIconSlack','orbIconSf','orbIconOrg62','orbIconRca'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('orb-active');
+  });
+  const active = document.getElementById(iconId);
+  if (active) active.classList.add('orb-active');
 }
 
 function showLoadingError(msg) {
@@ -342,8 +380,8 @@ function hideLoadingError() {
 }
 
 /* ── Preview page builder ── */
-function buildPreviewPage(rcaBodyHtml, isDemo) {
-  const caseNum   = document.getElementById('caseNumber') ? document.getElementById('caseNumber').value : '';
+function buildPreviewPage(rcaBodyHtml, isDemo, caseNum) {
+  if (caseNum === undefined) caseNum = document.getElementById('caseNumber') ? document.getElementById('caseNumber').value : '';
   const demoBanner = isDemo ? '<div class="demo-banner">⚠ <strong>Demo Mode</strong> — Sample data only.</div>' : '';
   const aiLabel    = isDemo ? '⚠ Demo Sample' : '✓ AI Generated';
   const badgeClass = isDemo ? 'badge-orange' : 'badge-green';
@@ -451,7 +489,7 @@ function toolbarHTML() {
   return [
     '<div class="toolbar">',
     '<div class="toolbar-brand">',
-    '<div class="toolbar-brand-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg></div>',
+    '<img src="' + chrome.runtime.getURL('icons/RCALOGO.png') + '" style="width:32px;height:32px;border-radius:7px;object-fit:cover;flex-shrink:0;" alt="RCA"/>',
     '<span class="toolbar-brand-text">RCA Analysis</span>',
     '</div>',
     '<button class="btn btn-tz" id="btnTzToggle"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg><span id="tzLabel">PST</span></button>',
@@ -596,3 +634,166 @@ function getDemoRCA(caseNumber) {
     '</ul>',
   ].join('');
 }
+
+/* ══════════════════════════════════════
+   RECENT ANALYSES HISTORY
+   ══════════════════════════════════════ */
+
+const MAX_HISTORY = 8;
+
+/* Extract the real OrgCS Case record URL from the generated RCA HTML.
+   The RCA agent embeds source-link anchors with the actual Salesforce record ID.
+   If none is found, fall back to a global search by case number. */
+function extractOrgCSUrl(bodyHtml, caseNumber) {
+  // Match URLs like https://orgcs.lightning.force.com/lightning/r/Case/5001Qxxxxx/view
+  const m = bodyHtml.match(/https?:\/\/orgcs[^"'\s<>]*\/lightning\/r\/Case\/([A-Za-z0-9]{15,18})\/view/);
+  if (m) return m[0];
+  // Fallback: open global search so the user can find the case
+  return 'https://orgcs.lightning.force.com/lightning/r/search?searchText=' + encodeURIComponent(caseNumber) + '&objectType=Case';
+}
+
+function saveToHistory(caseNumber, bodyHtml) {
+  const id      = Date.now();
+  const key     = 'rcaBody_' + caseNumber + '_' + id;
+  const orgcsUrl = extractOrgCSUrl(bodyHtml, caseNumber);
+  const entry = { id, caseNumber, timestamp: id, bodyHtmlKey: key, orgcsUrl };
+
+  chrome.storage.local.set({ [key]: bodyHtml }, () => {
+    chrome.storage.local.get(['rcaHistory'], ({ rcaHistory }) => {
+      const history = rcaHistory || [];
+      history.unshift(entry);
+      const trimmed = history.slice(0, MAX_HISTORY);
+      const removed = history.slice(MAX_HISTORY);
+      const removedKeys = removed.map(e => e.bodyHtmlKey).filter(Boolean);
+      if (removedKeys.length) chrome.storage.local.remove(removedKeys);
+      chrome.storage.local.set({ rcaHistory: trimmed }, () => renderRecentAnalyses(trimmed));
+    });
+  });
+}
+
+function loadHistory() {
+  chrome.storage.local.get(['rcaHistory'], ({ rcaHistory }) => {
+    renderRecentAnalyses(rcaHistory || []);
+  });
+}
+
+const RECENT_VISIBLE = 3;
+
+function recentItemHTML(entry) {
+  const orgcsUrl = entry.orgcsUrl ||
+    'https://orgcs.lightning.force.com/lightning/r/search?searchText=' + encodeURIComponent(entry.caseNumber) + '&objectType=Case';
+  const timeAgo = formatTimeAgo(entry.timestamp);
+  return [
+    '<div class="recent-item">',
+    '  <div class="recent-item-info">',
+    '    <a class="recent-case-num" href="' + orgcsUrl + '" target="_blank">#' + escHtml(entry.caseNumber) + '</a>',
+    '    <span class="recent-time">' + timeAgo + '</span>',
+    '  </div>',
+    '  <div class="recent-item-actions">',
+    '    <button class="recent-open-btn" data-key="' + entry.bodyHtmlKey + '" data-case="' + escHtml(entry.caseNumber) + '">',
+    '      Open RCA',
+    '      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>',
+    '    </button>',
+    '  </div>',
+    '</div>',
+  ].join('');
+}
+
+function wireOpenButtons(container) {
+  container.querySelectorAll('.recent-open-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const storageKey = btn.getAttribute('data-key');
+      const cn         = btn.getAttribute('data-case');
+      chrome.storage.local.get([storageKey], result => {
+        const body = result[storageKey];
+        if (!body) { showToast('RCA data not found — may have been cleared', 'error'); return; }
+        openPreviewTab(buildPreviewPage(body, false, cn), cn);
+      });
+    });
+  });
+}
+
+function renderRecentAnalyses(history) {
+  const list      = document.getElementById('recentList');
+  const viewAllBtn = document.getElementById('viewAllBtn');
+  if (!list) return;
+
+  if (!history || !history.length) {
+    list.innerHTML = '<div class="recent-empty">No analyses yet — run your first RCA above.</div>';
+    if (viewAllBtn) viewAllBtn.classList.add('hidden');
+    return;
+  }
+
+  const visible = history.slice(0, RECENT_VISIBLE);
+  list.innerHTML = visible.map(recentItemHTML).join('');
+  wireOpenButtons(list);
+
+  if (viewAllBtn) {
+    if (history.length > RECENT_VISIBLE) {
+      viewAllBtn.classList.remove('hidden');
+      viewAllBtn.textContent = 'View all (' + history.length + ')';
+    } else {
+      viewAllBtn.classList.add('hidden');
+    }
+  }
+
+  // keep full history on the button for the modal
+  if (viewAllBtn) viewAllBtn._history = history;
+}
+
+function formatTimeAgo(timestamp) {
+  const diff = Date.now() - timestamp;
+  const min  = Math.floor(diff / 60000);
+  const hrs  = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
+  if (min < 1)  return 'Just now';
+  if (min < 60) return min + ' min ago';
+  if (hrs < 24) return hrs + (hrs === 1 ? ' hour ago' : ' hours ago');
+  return days + (days === 1 ? ' day ago' : ' days ago');
+}
+
+/* Load history on startup */
+loadHistory();
+
+/* ══════════════════════════════════════
+   CLEAR HISTORY
+   ══════════════════════════════════════ */
+document.getElementById('clearHistoryBtn').addEventListener('click', () => {
+  chrome.storage.local.get(['rcaHistory'], ({ rcaHistory }) => {
+    const keys = (rcaHistory || []).map(e => e.bodyHtmlKey).filter(Boolean);
+    chrome.storage.local.remove([...keys, 'rcaHistory'], () => {
+      renderRecentAnalyses([]);
+      showToast('History cleared', 'info');
+    });
+  });
+});
+
+/* ══════════════════════════════════════
+   VIEW ALL MODAL
+   ══════════════════════════════════════ */
+const viewAllModal = document.getElementById('viewAllModal');
+
+function openViewAllModal(history) {
+  const listEl = document.getElementById('viewAllList');
+  if (listEl) {
+    listEl.innerHTML = history.map(recentItemHTML).join('');
+    wireOpenButtons(listEl);
+  }
+  viewAllModal.classList.remove('hidden');
+}
+
+function closeViewAllModal() {
+  viewAllModal.classList.add('hidden');
+}
+
+document.getElementById('viewAllBtn').addEventListener('click', function() {
+  const history = this._history || [];
+  openViewAllModal(history);
+});
+
+document.getElementById('viewAllCloseBtn').addEventListener('click', closeViewAllModal);
+viewAllModal.addEventListener('click', e => { if (e.target === viewAllModal) closeViewAllModal(); });
+
+document.getElementById('helpBtn').addEventListener('click', () => {
+  showToast('Help docs coming soon', 'info');
+});

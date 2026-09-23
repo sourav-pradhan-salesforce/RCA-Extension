@@ -3,6 +3,8 @@
 <head>
   <meta charset="UTF-8"/>
   <title>RCA Analysis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css"/>
 </head>
 <body>
@@ -13,10 +15,7 @@
     <header class="app-header">
       <div class="header-logo">
         <div class="logo-mark">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"
-                  stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
+          <img src="icons/RCALOGO.png" style="height:34px;width:34px;border-radius:7px;object-fit:cover;">
         </div>
         <div class="logo-text">
           <span class="logo-title">RCA Analysis</span>
@@ -45,60 +44,172 @@
       </div>
     </header>
 
+    <!-- ── Scrollable content (between fixed header & footer) ── -->
+    <div class="views-scroll" id="viewsScroll">
+
     <!-- ── Main View ── -->
     <main id="mainView" class="view active">
       <div class="form-body">
 
-        <!-- Case Number Card -->
-        <div class="card">
-          <div class="field-label">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-            Case Number
-          </div>
-          <div class="input-row">
-            <input type="text" id="caseNumber" class="case-input"
-                   placeholder="e.g. 473996707" autocomplete="off" spellcheck="false"/>
-          </div>
-        </div>
-
-        <!-- Sources Card -->
-        <div class="card card-sources">
-          <div class="field-label">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            Data Sources
-          </div>
-          <div class="source-pills">
-            <span class="pill"><span class="pill-dot slack"></span>Slack</span>
-            <span class="pill"><span class="pill-dot orgcs"></span>OrgCS</span>
-            <span class="pill"><span class="pill-dot org62"></span>Org62</span>
-            <span class="pill"><span class="pill-dot gus"></span>GUS</span>
-          </div>
-        </div>
-
-        <!-- CTAs -->
         <input type="file" id="templateFileInput" accept=".pdf,.txt" style="display:none"/>
-        <div class="cta-group">
-          <button class="btn-generate btn-internal" id="internalBtn">
-            <span class="btn-shimmer"></span>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+
+        <!-- Hero -->
+        <div class="hero">
+          <h1 class="hero-title">Investigate a case</h1>
+          <p class="hero-sub">Connect the evidence. Find the root cause.</p>
+        </div>
+
+        <!-- Form Card -->
+        <div class="form-card">
+
+          <!-- Case Number -->
+          <div class="form-group">
+            <div class="fg-label">Case number</div>
+            <div class="input-row">
+              <svg class="input-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+              </svg>
+              <input type="text" id="caseNumber" class="case-input"
+                     placeholder="e.g. 473996707" autocomplete="off" spellcheck="false"/>
+            </div>
+          </div>
+
+          <!-- Data Sources -->
+          <div class="form-group">
+            <div class="fg-label-row">
+              <span class="fg-label">Data sources</span>
+              <span class="fg-hint">All four sources are included automatically</span>
+            </div>
+            <div class="source-pills">
+              <span class="pill">
+                <svg class="pill-logo" width="14" height="14" viewBox="0 0 54 54" xmlns="http://www.w3.org/2000/svg">
+                  <path fill="#E01E5A" d="M19.712.133a5.381 5.381 0 0 0-5.376 5.387 5.381 5.381 0 0 0 5.376 5.386h5.376V5.52A5.381 5.381 0 0 0 19.712.133m0 14.365H5.376A5.381 5.381 0 0 0 0 19.884a5.381 5.381 0 0 0 5.376 5.387h14.336a5.381 5.381 0 0 0 5.376-5.387 5.381 5.381 0 0 0-5.376-5.386"/>
+                  <path fill="#36C5F0" d="M53.76 19.884a5.381 5.381 0 0 0-5.376-5.386 5.381 5.381 0 0 0-5.376 5.386v5.387h5.376a5.381 5.381 0 0 0 5.376-5.387m-14.336 0V5.52A5.381 5.381 0 0 0 34.048.133a5.381 5.381 0 0 0-5.376 5.387v14.364a5.381 5.381 0 0 0 5.376 5.387 5.381 5.381 0 0 0 5.376-5.387"/>
+                  <path fill="#2EB67D" d="M34.048 54a5.381 5.381 0 0 0 5.376-5.387 5.381 5.381 0 0 0-5.376-5.386h-5.376v5.386A5.381 5.381 0 0 0 34.048 54m0-14.365h14.336a5.381 5.381 0 0 0 5.376-5.386 5.381 5.381 0 0 0-5.376-5.387H34.048a5.381 5.381 0 0 0-5.376 5.387 5.381 5.381 0 0 0 5.376 5.386"/>
+                  <path fill="#ECB22E" d="M0 34.249a5.381 5.381 0 0 0 5.376 5.386 5.381 5.381 0 0 0 5.376-5.386v-5.387H5.376A5.381 5.381 0 0 0 0 34.249m14.336 0v14.364A5.381 5.381 0 0 0 19.712 54a5.381 5.381 0 0 0 5.376-5.387V34.249a5.381 5.381 0 0 0-5.376-5.387 5.381 5.381 0 0 0-5.376 5.387"/>
+                </svg>
+                Slack
+              </span>
+              <span class="pill">
+                <img class="pill-logo sf-logo" src="icons/sf-logo.png" alt="Salesforce"/>
+                OrgCS
+              </span>
+              <span class="pill">
+                <img class="pill-logo sf-logo" src="icons/org62-logo.png" alt="Org62"/>
+                Org62
+              </span>
+              <span class="pill">
+                <img class="pill-logo sf-logo" src="icons/sf-logo.png" alt="Salesforce"/>
+                GUS
+              </span>
+            </div>
+          </div>
+
+          <!-- Analysis Type -->
+          <div class="form-group">
+            <div class="fg-label-row">
+              <span class="fg-label">Analysis type</span>
+              <span class="fg-hint">Choose how to analyze this case</span>
+            </div>
+            <div class="analysis-tabs" id="analysisTabs">
+              <button class="atab active" data-type="internal" id="tabInternal">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+                </svg>
+                Internal
+              </button>
+              <button class="atab" data-type="external" id="tabExternal">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+                </svg>
+                External
+              </button>
+              <button class="atab" data-type="custom" id="tabCustom">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                Custom
+              </button>
+            </div>
+          </div>
+
+          <!-- Analyze Button -->
+          <button class="btn-analyze" id="analyzeBtn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
             </svg>
-            Internal
-          </button>
-          <button class="btn-generate btn-external" id="externalBtn">
-            <span class="btn-shimmer"></span>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+            Analyze case
+            <svg class="btn-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
             </svg>
-            External
           </button>
-          <button class="btn-generate btn-custom" id="customBtn">
-            <span class="btn-shimmer"></span>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
-            </svg>
-            Custom
-          </button>
+
+        </div><!-- /form-card -->
+
+        <!-- Recent Analyses -->
+        <div class="recent-section">
+          <div class="recent-header">
+            <span class="recent-title-text">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px;color:var(--brand)">
+                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                <polyline points="3 3 3 8 8 8"/>
+                <line x1="12" y1="7" x2="12" y2="12"/>
+                <line x1="12" y1="12" x2="16" y2="14"/>
+              </svg>Recent analyses
+            </span>
+            <div class="recent-header-actions">
+              <button class="btn-view-all hidden" id="viewAllBtn">View all</button>
+              <button class="btn-clear-history" id="clearHistoryBtn">Clear all</button>
+            </div>
+          </div>
+          <div class="recent-list" id="recentList">
+            <div class="recent-empty">No analyses yet — run your first RCA above.</div>
+          </div>
+        </div>
+
+        <!-- From case to clarity -->
+        <div class="clarity-section">
+          <div class="clarity-header">
+            <span class="clarity-title">From case to clarity</span>
+            <p class="clarity-sub">A faster path to answers.</p>
+          </div>
+          <div class="clarity-steps">
+            <div class="clarity-step">
+              <div class="cstep-top"><span class="cstep-badge">1</span></div>
+              <div class="cstep-icon">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="16" y1="13" x2="8" y2="13"/>
+                  <line x1="16" y1="17" x2="8" y2="17"/>
+                </svg>
+              </div>
+              <strong class="cstep-name">Enter a case</strong>
+              <p class="cstep-desc">Provide a Salesforce case number.</p>
+            </div>
+            <div class="clarity-step">
+              <div class="cstep-top"><span class="cstep-badge">2</span></div>
+              <div class="cstep-icon">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                  <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+                </svg>
+              </div>
+              <strong class="cstep-name">Run analysis</strong>
+              <p class="cstep-desc">Automatically checks all four sources.</p>
+            </div>
+            <div class="clarity-step">
+              <div class="cstep-top"><span class="cstep-badge">3</span></div>
+              <div class="cstep-icon">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                  <line x1="18" y1="20" x2="18" y2="10"/>
+                  <line x1="12" y1="20" x2="12" y2="4"/>
+                  <line x1="6" y1="20" x2="6" y2="14"/>
+                </svg>
+              </div>
+              <strong class="cstep-name">Review findings</strong>
+              <p class="cstep-desc">Get insights and the root cause.</p>
+            </div>
+          </div>
         </div>
 
       </div>
@@ -108,7 +219,6 @@
     <div id="loadingView" class="view">
       <div class="loading-body">
 
-        <!-- Spinner -->
         <div id="loadingSpinner" class="orbital-wrap">
           <svg class="orbital-svg" viewBox="0 0 100 100">
             <circle class="orbital-track" cx="50" cy="50" r="38"/>
@@ -116,9 +226,16 @@
             <circle class="orbital-arc2"  cx="50" cy="50" r="38"/>
           </svg>
           <div class="orbital-center">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+            <!-- Source icons — JS toggles .orb-active class -->
+            <svg id="orbIconSlack" class="orb-icon" width="22" height="22" viewBox="0 0 54 54" xmlns="http://www.w3.org/2000/svg">
+              <path fill="#E01E5A" d="M19.712.133a5.381 5.381 0 0 0-5.376 5.387 5.381 5.381 0 0 0 5.376 5.386h5.376V5.52A5.381 5.381 0 0 0 19.712.133m0 14.365H5.376A5.381 5.381 0 0 0 0 19.884a5.381 5.381 0 0 0 5.376 5.387h14.336a5.381 5.381 0 0 0 5.376-5.387 5.381 5.381 0 0 0-5.376-5.386"/>
+              <path fill="#36C5F0" d="M53.76 19.884a5.381 5.381 0 0 0-5.376-5.386 5.381 5.381 0 0 0-5.376 5.386v5.387h5.376a5.381 5.381 0 0 0 5.376-5.387m-14.336 0V5.52A5.381 5.381 0 0 0 34.048.133a5.381 5.381 0 0 0-5.376 5.387v14.364a5.381 5.381 0 0 0 5.376 5.387 5.381 5.381 0 0 0 5.376-5.387"/>
+              <path fill="#2EB67D" d="M34.048 54a5.381 5.381 0 0 0 5.376-5.387 5.381 5.381 0 0 0-5.376-5.386h-5.376v5.386A5.381 5.381 0 0 0 34.048 54m0-14.365h14.336a5.381 5.381 0 0 0 5.376-5.386 5.381 5.381 0 0 0-5.376-5.387H34.048a5.381 5.381 0 0 0-5.376 5.387 5.381 5.381 0 0 0 5.376 5.386"/>
+              <path fill="#ECB22E" d="M0 34.249a5.381 5.381 0 0 0 5.376 5.386 5.381 5.381 0 0 0 5.376-5.386v-5.387H5.376A5.381 5.381 0 0 0 0 34.249m14.336 0v14.364A5.381 5.381 0 0 0 19.712 54a5.381 5.381 0 0 0 5.376-5.387V34.249a5.381 5.381 0 0 0-5.376-5.387 5.381 5.381 0 0 0-5.376 5.387"/>
             </svg>
+            <img id="orbIconSf"    class="orb-icon" src="icons/sf-logo.png"    alt="Salesforce" style="width:24px;height:auto;"/>
+            <img id="orbIconOrg62" class="orb-icon" src="icons/org62-logo.png" alt="Org62"      style="width:26px;height:26px;border-radius:6px;object-fit:cover;"/>
+            <img id="orbIconRca"   class="orb-icon orb-active" src="icons/RCALOGO.png" alt="RCA" style="width:26px;height:26px;border-radius:5px;object-fit:cover;"/>
           </div>
         </div>
 
@@ -136,7 +253,6 @@
           Cancel
         </button>
 
-        <!-- Error -->
         <div id="loadingError" class="loading-error hidden">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="10"/>
@@ -147,7 +263,6 @@
           <button class="btn-back" id="errorBackBtn">← Go Back</button>
         </div>
 
-        <!-- Console -->
         <div class="console-wrap">
           <button class="console-toggle" id="consoleToggle">▼ Console</button>
           <div class="console-panel hidden" id="consolePanel">
@@ -155,11 +270,9 @@
           </div>
         </div>
 
-        <!-- Steps -->
         <div class="steps-timeline">
           <div class="step" id="step-slack">
-            <div class="step-node">
-              <div class="step-pulse"></div>
+            <div class="step-node"><div class="step-pulse"></div>
               <div class="step-circle">
                 <svg class="step-check" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>
                 <span class="step-num">1</span>
@@ -168,8 +281,7 @@
             <span class="step-label">Slack SEV &amp; swarm</span>
           </div>
           <div class="step" id="step-orgcs">
-            <div class="step-node">
-              <div class="step-pulse"></div>
+            <div class="step-node"><div class="step-pulse"></div>
               <div class="step-circle">
                 <svg class="step-check" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>
                 <span class="step-num">2</span>
@@ -178,8 +290,7 @@
             <span class="step-label">OrgCS case data</span>
           </div>
           <div class="step" id="step-org62">
-            <div class="step-node">
-              <div class="step-pulse"></div>
+            <div class="step-node"><div class="step-pulse"></div>
               <div class="step-circle">
                 <svg class="step-check" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>
                 <span class="step-num">3</span>
@@ -188,8 +299,7 @@
             <span class="step-label">Org62 account data</span>
           </div>
           <div class="step" id="step-gus">
-            <div class="step-node">
-              <div class="step-pulse"></div>
+            <div class="step-node"><div class="step-pulse"></div>
               <div class="step-circle">
                 <svg class="step-check" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>
                 <span class="step-num">4</span>
@@ -198,8 +308,7 @@
             <span class="step-label">GUS work items</span>
           </div>
           <div class="step" id="step-public">
-            <div class="step-node">
-              <div class="step-pulse"></div>
+            <div class="step-node"><div class="step-pulse"></div>
               <div class="step-circle">
                 <svg class="step-check" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>
                 <span class="step-num">5</span>
@@ -208,8 +317,7 @@
             <span class="step-label">Knowledge &amp; Known Issues</span>
           </div>
           <div class="step" id="step-generate">
-            <div class="step-node">
-              <div class="step-pulse"></div>
+            <div class="step-node"><div class="step-pulse"></div>
               <div class="step-circle">
                 <svg class="step-check" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>
                 <span class="step-num">6</span>
@@ -248,6 +356,46 @@
         </div>
         <button class="btn-secondary" id="checkProxyBtn">Check Connection</button>
         <div id="proxyDetail" class="hidden"></div>
+      </div>
+    </div>
+
+    </div><!-- /views-scroll -->
+
+    <!-- ── Footer ── -->
+    <footer class="app-footer" id="appFooter">
+      <div class="footer-left">
+        <button class="footer-btn" id="helpBtn">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+            <line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+          Help
+        </button>
+      </div>
+      <div class="footer-brand">
+        <img src="icons/RCALOGO.png" class="footer-logo" alt="RCA"/>
+        <div class="footer-brand-text">
+          <span class="footer-brand-name">RCA Analysis</span>
+          <span class="footer-brand-sub">Salesforce Intelligence</span>
+        </div>
+      </div>
+    </footer>
+
+    <!-- ── View All Analyses Modal ── -->
+    <div id="viewAllModal" class="viewall-modal hidden">
+      <div class="viewall-card">
+        <div class="viewall-header">
+          <div class="viewall-header-left">
+            <img src="icons/RCALOGO.png" class="viewall-logo" alt="RCA"/>
+            <span class="viewall-title">All Analysis</span>
+          </div>
+          <button class="btn-icon" id="viewAllCloseBtn" title="Close">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+        <div class="viewall-list" id="viewAllList"></div>
       </div>
     </div>
 
