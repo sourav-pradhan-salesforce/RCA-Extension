@@ -1299,11 +1299,11 @@ class RCAHandler(BaseHTTPRequestHandler):
             prefetch_data = None
             try:
                 # We need account name for channel slug — fetch it from OrgCS first
-                # Quick orgcs call to get account name
+                # Quick orgcs call to get account name and Id
                 account_name = ''
                 try:
                     orgcs_raw = call_orgcs_soql(
-                        f"SELECT Account.Name, Account.Id FROM Case WHERE CaseNumber='{case_number}' LIMIT 1"
+                        f"SELECT Account.Name, Account.Id, AccountId FROM Case WHERE CaseNumber='{case_number}' LIMIT 1"
                     )
                     import re as _re
                     raw_str = str(orgcs_raw)
