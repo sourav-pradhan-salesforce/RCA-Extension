@@ -582,15 +582,15 @@ def prefetch_slack_and_gus(case_number, account_name):
         # ── 2. Read channel history ──────────────────────────────────────────
         try:
             raw = call_plugin_mcp('slack', 'slack_read_channel',
-                                   {'channel_id': channel_id, 'limit': 50}, timeout=30)
-            result['messages_summary'] = str(raw)[:6000]
+                                   {'channel_id': channel_id, 'limit': 100}, timeout=30)
+            result['messages_summary'] = str(raw)[:8000]
             logging.info(f'Prefetch: read {len(str(raw))} chars from channel {channel_id}')
         except Exception as e:
             logging.warning(f'Prefetch: channel read failed: {e}')
             try:
                 raw = call_plugin_mcp('slack', 'slack_get_channel_history',
-                                       {'channel_id': channel_id, 'limit': 50}, timeout=30)
-                result['messages_summary'] = str(raw)[:6000]
+                                       {'channel_id': channel_id, 'limit': 100}, timeout=30)
+                result['messages_summary'] = str(raw)[:8000]
             except Exception as e2:
                 logging.warning(f'Prefetch: channel history fallback failed: {e2}')
 
@@ -981,20 +981,31 @@ A3. OrgCS comments:
         ch_url  = prefetch['channel_url']
         msgs    = prefetch.get('messages_summary', '')
 
-        slack_section = f"""C. Slack — PRE-FETCHED (do NOT call Slack MCP tools):
+        slack_section = f"""C. Slack — channel found via pre-fetch:
    Channel: #{ch_name} (ID: {ch_id})
    URL: {ch_url}
-   Messages (first 6000 chars):
-{msgs[:6000]}
+   Messages ({len(msgs)} chars loaded):
+{msgs[:8000]}
 
-   USE this data for: first alert time, error messages, actions taken, resolution time.
+   IMPORTANT: Thread replies contain the technical root-cause discussion and are NOT included above.
+   For each message that has thread replies (has a thread_ts or reply_count > 0), fetch them:
+   mcp__plugin_slack_slack__slack_get_thread_replies(channel_id="{ch_id}", thread_ts="<ts>")
+   Prioritize threads mentioning: error, exception, root cause, fix, deploy, mitigation, engineering.
+   Include key technical findings from threads in the RCA.
+
    Channel link for RCA: <a href="{ch_url}" target="_blank" class="source-link">#{ch_name} ↗</a>"""
     else:
-        slack_section = f"""C. Slack — scan OrgCS comments (A3) for Slack channel URLs or IDs first.
-   If found, use that channel ID directly.
-   Otherwise search messages: "{case_number}", "sev {case_number}"
-   Try mcp__plugin_slack_slack__slack_search_public_and_private; on error skip Slack and write "Not found".
-   Record EXACT channel ID and name."""
+        slack_section = f"""C. Slack — channel not found via server pre-fetch. Search for it now:
+   1. Scan OrgCS case comments (A3 results) for any Slack channel URLs or IDs — use directly if found.
+   2. mcp__plugin_slack_slack__slack_search_channels("sev1-{case_number}")
+   3. mcp__plugin_slack_slack__slack_search_channels("sev {case_number}")
+   4. mcp__plugin_slack_slack__slack_search_public_and_private("sev {case_number}")
+   5. mcp__plugin_slack_slack__slack_search_public_and_private("case {case_number} escalation")
+   Once channel is found:
+   - Read messages: mcp__plugin_slack_slack__slack_read_channel(channel_id=<id>, limit=100)
+   - For messages with thread replies, fetch them: mcp__plugin_slack_slack__slack_get_thread_replies(channel_id=<id>, thread_ts=<ts>)
+   - Focus on: error messages, root cause discussions, engineering actions, resolution steps.
+   If no channel found after all attempts, write "Slack: Not found" in the RCA and continue."""
 
     if gus_pre:
         gus_items_text = '\n'.join(
@@ -1114,7 +1125,7 @@ STATUS COLOR RULE:
 
 SECTIONS (keep each one SHORT):
 1. Header table — exact fields in this order:
-   Account Name (Account.Name) |
+   Account Name — value: Account.Name <a href="https://orgcs.lightning.force.com/lightning/r/Account/<Account.Id>/view" target="_blank" class="source-link">↗</a> <span class="source-badge">OrgCS</span> — use the exact Account.Id (18-char) from the A1 SOQL result |
    Case # (CaseNumber as OrgCS link, bold SEV-1 label) |
    Case # Sev-2 (if applicable, else omit row) |
    SEV Level (Severity_Level__c) |
@@ -1292,13 +1303,24 @@ class RCAHandler(BaseHTTPRequestHandler):
                 account_name = ''
                 try:
                     orgcs_raw = call_orgcs_soql(
-                        f"SELECT Account.Name FROM Case WHERE CaseNumber='{case_number}' LIMIT 1"
+                        f"SELECT Account.Name, Account.Id FROM Case WHERE CaseNumber='{case_number}' LIMIT 1"
                     )
                     import re as _re
-                    m = _re.search(r'"Name"\s*:\s*"([^"]+)"', str(orgcs_raw))
+                    raw_str = str(orgcs_raw)
+                    m = _re.search(r'"Name"\s*:\s*"([^"]+)"', raw_str)
                     if m:
                         account_name = m.group(1)
                         logging.info(f'Pre-fetch account name: {account_name}')
+                    # Account IDs start with '001' in Salesforce
+                    m_id = _re.search(r'"(?:Id|Account\.Id)"\s*:\s*"(001[A-Za-z0-9]{12,15})"', raw_str)
+                    if m_id:
+                        account_id = m_id.group(1)
+                        logging.info(f'Pre-fetch account ID: {account_id}')
+                        sse_write('account', {
+                            'id': account_id,
+                            'name': account_name,
+                            'orgcsUrl': f'https://orgcs.lightning.force.com/lightning/r/Account/{account_id}/view'
+                        })
                 except Exception as e:
                     logging.warning(f'Pre-fetch account name lookup failed: {e}')
 

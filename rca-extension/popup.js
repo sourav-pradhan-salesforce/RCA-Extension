@@ -160,6 +160,7 @@ document.getElementById('templateFileInput').addEventListener('change', async (e
 
 let _isGenerating = false;
 let _activeES = null; // current EventSource — used by cancel
+let _pendingAccountInfo = null; // account metadata from server SSE
 
 document.getElementById('cancelBtn').addEventListener('click', () => {
   if (_activeES) { _activeES.close(); _activeES = null; }
@@ -171,6 +172,7 @@ document.getElementById('cancelBtn').addEventListener('click', () => {
 });
 
 async function startGeneration(caseNumber) {
+  _pendingAccountInfo = null;
   _isGenerating = true;
   chrome.storage.local.set({ rcaInProgress: { caseNumber, templateId: currentTemplateId || null, startedAt: Date.now() } });
   showView('loading');
@@ -187,7 +189,7 @@ async function startGeneration(caseNumber) {
     stopTimer();
     stopAutoSteps();
     ['slack','orgcs','org62','gus','public','generate'].forEach(s => setStep(s, 'done'));
-    saveToHistory(caseNumber, html);
+    saveToHistory(caseNumber, html, selectedType, _pendingAccountInfo);
     openPreviewTab(buildPreviewPage(html, false), caseNumber);
     showView('main');
   } catch (err) {
@@ -286,6 +288,7 @@ function fetchRCA(caseNumber) {
 
     es.addEventListener('status',  e => { try { const d = JSON.parse(e.data); setStatus(d.msg); } catch (_) {} });
     es.addEventListener('console', e => { try { const d = JSON.parse(e.data); consoleLog(d.line, d.kind || 'info'); } catch (_) {} });
+    es.addEventListener('account', e => { try { _pendingAccountInfo = JSON.parse(e.data); } catch (_) {} });
     es.addEventListener('done',    e => { es.close(); clearTimeout(timeout); try { done(resolve, JSON.parse(e.data).html); } catch (_) { done(reject, new Error('Bad response')); } });
     es.addEventListener('error',   e => { es.close(); clearTimeout(timeout); try { done(reject, new Error(JSON.parse(e.data).message)); } catch (_) { done(reject, new Error('Unknown error')); } });
   });
@@ -641,6 +644,29 @@ function getDemoRCA(caseNumber) {
 
 const MAX_HISTORY = 8;
 
+/* Extract account name + OrgCS account URL from the RCA header table. */
+function extractAccountInfo(bodyHtml) {
+  let m = bodyHtml.match(/<td[^>]*>\s*Account\s*Name\s*<\/td>\s*<td[^>]*>([\s\S]*?)<\/td>/i);
+  if (!m) m = bodyHtml.match(/Account\s*Name[\s\S]{0,30}?<td[^>]*>([\s\S]*?)<\/td>/i);
+  if (!m) return { name: '', url: '' };
+
+  const cell = m[1];
+  // Extract OrgCS Account link (contains /Account/ in the path)
+  const urlM = cell.match(/href="(https:\/\/orgcs\.lightning\.force\.com\/lightning\/r\/Account\/[^"]+)"/i);
+  const url = urlM ? urlM[1] : '';
+
+  // Clean name: strip source-badge spans and all remaining tags
+  const name = cell
+    .replace(/<span[^>]*class="[^"]*source-badge[^"]*"[^>]*>[\s\S]*?<\/span>/gi, '')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ')
+    .trim();
+
+  return { name, url };
+}
+/* Kept for migration compatibility */
+function extractAccountName(bodyHtml) { return extractAccountInfo(bodyHtml).name; }
+
 /* Extract the real OrgCS Case record URL from the generated RCA HTML.
    The RCA agent embeds source-link anchors with the actual Salesforce record ID.
    If none is found, fall back to a global search by case number. */
@@ -652,11 +678,15 @@ function extractOrgCSUrl(bodyHtml, caseNumber) {
   return 'https://orgcs.lightning.force.com/lightning/r/search?searchText=' + encodeURIComponent(caseNumber) + '&objectType=Case';
 }
 
-function saveToHistory(caseNumber, bodyHtml) {
+function saveToHistory(caseNumber, bodyHtml, analysisType, accountInfo) {
   const id      = Date.now();
   const key     = 'rcaBody_' + caseNumber + '_' + id;
   const orgcsUrl = extractOrgCSUrl(bodyHtml, caseNumber);
-  const entry = { id, caseNumber, timestamp: id, bodyHtmlKey: key, orgcsUrl };
+  const { name: htmlName, url: htmlUrl } = extractAccountInfo(bodyHtml);
+  // Server-emitted account info is most reliable (has real Account.Id); fall back to HTML extraction
+  const accountName = (accountInfo && accountInfo.name) || htmlName;
+  const accountUrl  = (accountInfo && accountInfo.orgcsUrl) || htmlUrl;
+  const entry = { id, caseNumber, accountName, accountUrl, analysisType: analysisType || 'internal', timestamp: id, bodyHtmlKey: key, orgcsUrl };
 
   chrome.storage.local.set({ [key]: bodyHtml }, () => {
     chrome.storage.local.get(['rcaHistory'], ({ rcaHistory }) => {
@@ -673,21 +703,51 @@ function saveToHistory(caseNumber, bodyHtml) {
 
 function loadHistory() {
   chrome.storage.local.get(['rcaHistory'], ({ rcaHistory }) => {
-    renderRecentAnalyses(rcaHistory || []);
+    const history = rcaHistory || [];
+    // Re-migrate entries with no URL, no name, or a dirty name (still contains "OrgCS" badge text)
+    const needsMigration = history.filter(e =>
+      e.bodyHtmlKey && (!e.accountUrl || !e.accountName || /\borgcs\b/i.test(e.accountName))
+    );
+    if (!needsMigration.length) { renderRecentAnalyses(history); return; }
+    const keys = needsMigration.map(e => e.bodyHtmlKey);
+    chrome.storage.local.get(keys, bodies => {
+      let updated = false;
+      history.forEach(entry => {
+        if (entry.bodyHtmlKey && bodies[entry.bodyHtmlKey] &&
+            (!entry.accountUrl || !entry.accountName || /\borgcs\b/i.test(entry.accountName))) {
+          const { name, url } = extractAccountInfo(bodies[entry.bodyHtmlKey]);
+          if (name) { entry.accountName = name; updated = true; }
+          if (url)  { entry.accountUrl  = url;  updated = true; }
+        }
+      });
+      if (updated) chrome.storage.local.set({ rcaHistory: history });
+      renderRecentAnalyses(history);
+    });
   });
 }
 
 const RECENT_VISIBLE = 3;
 
+const TYPE_LABEL = { internal: 'Internal', external: 'External', custom: 'Custom' };
+
 function recentItemHTML(entry) {
   const orgcsUrl = entry.orgcsUrl ||
     'https://orgcs.lightning.force.com/lightning/r/search?searchText=' + encodeURIComponent(entry.caseNumber) + '&objectType=Case';
   const timeAgo = formatTimeAgo(entry.timestamp);
+  const accountName = entry.accountName || '';
+  const accountUrl  = entry.accountUrl  || '';
+  const typeLabel   = TYPE_LABEL[entry.analysisType] || 'Internal';
+  const accountLine = accountName
+    ? (accountUrl
+        ? '    <a class="recent-account-name" href="' + accountUrl + '" target="_blank">' + escHtml(accountName) + '</a>'
+        : '    <span class="recent-account-name">' + escHtml(accountName) + '</span>')
+    : '';
   return [
     '<div class="recent-item">',
     '  <div class="recent-item-info">',
     '    <a class="recent-case-num" href="' + orgcsUrl + '" target="_blank">#' + escHtml(entry.caseNumber) + '</a>',
-    '    <span class="recent-time">' + timeAgo + '</span>',
+    accountLine,
+    '    <span class="recent-time"><span class="recent-type-tag">' + typeLabel + '</span> · ' + timeAgo + '</span>',
     '  </div>',
     '  <div class="recent-item-actions">',
     '    <button class="recent-open-btn" data-key="' + entry.bodyHtmlKey + '" data-case="' + escHtml(entry.caseNumber) + '">',
